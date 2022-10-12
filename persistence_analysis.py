@@ -185,7 +185,7 @@ class persistenceAnalysis:
         p.join()
         return None
 
-    def get_meta_dat_parallel(self, cpu_number, seed_initial_condition_list):
+    def get_meta_data_parallel(self, cpu_number, seed_initial_condition_list):
         if self.quantum_or_not:
             des = '../data/quantum/meta_data/' + self.network_type + '/' 
         else:
@@ -199,15 +199,26 @@ class persistenceAnalysis:
         p.join()
         return None
 
+    def get_state_distribution(self, seed_initial_condition, t_list, bin_num = 101):
+        if self.quantum_or_not:
+            des = '../data/quantum/state_distribution/' + self.network_type + '/' 
+        else:
+            des = '../data/classical/state_distribution/' + self.network_type + '/' 
+        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial={seed_initial_condition}.json'
+        if not os.path.exists(des):
+            os.makedirs(des)
+        t, phi = self.read_phi(seed_initial_condition)
+        dt = np.round(t[1] - t[0], 3)
+        p_state = {} 
+        for t_i in t_list:
+            p, bins = np.histogram(phi[int(t_i/dt)], bin_num)
+            p_state[t_i]  = {'p':p.tolist(), 'bins':bins[:-1].tolist()}
+        state_distribution = {'t': t[-1], 't_list': t_list, 'bin_num': bin_num, 'p_state': p_state}
+        
+        with open(save_file, 'w') as fp:
+            json.dump(state_distribution, fp)
+        return None
 
-
-
-
-    
-
-
-
-    
     
 
 cpu_number = 4
@@ -220,12 +231,11 @@ hbar = 0.6582
 if __name__ == '__main__':
     quantum_or_not = True
     network_type = '1D'
-    N = 100**2
+    N = 100
     d = 4
     seed = 0
     alpha = 1
     seed = 0
-    initial_setup = 'uniform_random'
     reference_line = 'average'
     reference_line = 0.5
     reference_lines = ['average']
@@ -233,11 +243,16 @@ if __name__ == '__main__':
     L_list = np.arange(10, 40, 10)
     N_list = np.power(L_list, 2)
     N_list = np.arange(100, 200, 200)
+    initial_setup = 'uniform_random'
     initial_setup = 'rho_uniform_phase_uniform'
     for reference_line in reference_lines:
         for N in N_list:
             pA = persistenceAnalysis(quantum_or_not, network_type, N, d, seed, alpha, initial_setup, reference_line)
             #pA.get_dpp_parallel(cpu_number, seed_initial_condition_list)
-            pA.get_meta_dat_parallel(cpu_number, seed_initial_condition_list)
+            #pA.get_meta_data_parallel(cpu_number, seed_initial_condition_list)
+            seed_initial_condition = 0
+            t_list = [0, 10, 50, 100, 200]
+            t_list = np.arange(0, 200, 5).tolist()
+            pA.get_state_distribution(seed_initial_condition, t_list)
             pass
 
