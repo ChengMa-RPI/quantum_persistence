@@ -36,15 +36,49 @@ class diffusionPersistence:
         self.d = d
         self.seed = seed
         self.alpha = alpha
-        self.A, self.A_interaction, self.index_i, self.index_j, self.cum_index = network_generate(network_type, N, 1, 0, seed, d) 
-        self.degree = np.sum(self.A, 0)
-        self.N_actual = len(self.A)
-        self.L = -self.A + np.diag(self.degree)
         self.t = t
         self.dt = dt
         self.initial_setup = initial_setup
         self.reference_line = reference_line
         self.seed_initial_condition = None
+
+        self.save_A_M()
+        self.degree = np.sum(self.A, 0)
+        self.N_actual = len(self.A)
+        self.L = -self.A + np.diag(self.degree)
+
+    def save_A_M(self):
+        save_des = '../data/matrix_save/'
+        topology_des = save_des + 'topology/'
+        operator_des = save_des + 'quan_operator/'
+        for des in [topology_des, operator_des]:
+            if not os.path.exists(des):
+                os.makedirs(des)
+
+        file_topology = topology_des + 'network_type={self.network_type}_N={self.N}_d={self.d}_seed={self.seed}.npy'
+        file_operator = operator_des + 'network_type={self.network_type}_N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}.npy'
+        if os.path.exists(file_topology):
+            pass
+
+        else:
+            self.A, self.A_interaction, self.index_i, self.index_j, self.cum_index = network_generate(network_type, N, 1, 0, seed, d) 
+
+        if os.path.exists(file_operator):
+            pass
+
+        else:
+            t = self.t
+            dt = self.dt
+            dx = self.alpha
+            degree = np.sum(self.A, 0)
+            a = -degree + (4j * m * dx **2) /  (hbar * dt)
+            b = degree + (4j * m * dx **2) /  (hbar * dt)
+            A1 = self.A + np.diag(a)
+            B1 = - self.A  + np.diag(b)
+            A1_inv = spinv(A1, check_finite=False)
+            M = A1_inv.dot(B1)
+            np.save(file_operator, M) 
+
 
 
     def get_initial_condition(self):
@@ -60,15 +94,28 @@ class diffusionPersistence:
                 initial_condition = np.random.RandomState(seed_initial_condition).uniform(0, 1, size = self.N_actual)
                 initial_condition = initial_condition / np.sum(initial_condition)
         else:
-            if initial_setup == 'rho_cons_phase_uniform':
+            if initial_setup == 'rho_uniform_phase_uniform':
+                initial_rho = np.random.RandomState(seed_initial_condition).uniform(0, 1, size=self.N_actual)
+                initial_phase = np.random.RandomState(seed_initial_condition).uniform(0, 2 * np.pi, size = self.N_actual)
+            elif initial_setup == 'rho_const_phase_uniform':
                 initial_phase = np.random.RandomState(seed_initial_condition).uniform(0, 2 * np.pi, size = self.N_actual)
                 initial_rho = np.ones(self.N_actual) 
-            elif initial_setup == 'rho_uniform_phase_const':
+            elif initial_setup == 'rho_uniform_phase_const_pi':
                 initial_rho = np.random.RandomState(seed_initial_condition).uniform(0, 1, size=self.N_actual)
                 initial_phase = np.pi
-            elif initial_setup == 'rho_uniform_phase_uniform':
+            elif initial_setup == 'rho_uniform_phase_const_pi_half':
                 initial_rho = np.random.RandomState(seed_initial_condition).uniform(0, 1, size=self.N_actual)
-                initial_phase = np.random.RandomState(seed_initial_condition).uniform(0, 2 * np.pi, size = self.N_actual)
+                initial_phase = np.pi/2
+            elif initial_setup == 'rho_uniform_phase_const_pi_quater':
+                initial_rho = np.random.RandomState(seed_initial_condition).uniform(0, 1, size=self.N_actual)
+                initial_phase = np.pi/4
+            elif initial_setup == 'gaussian_wave':
+                sigma = 1
+                p0 = 1
+                x = np.arange(0, 10, 1/self.N)
+                x0 = np.round(x.mean(), 5)
+                initial_rho = (1/(np.pi**0.25 * sigma**0.5 ) * np.exp(-(x-x0)**2/2/sigma**2)  ) ** 2
+                initial_phase =  p0 * x/ hbar
             else:
                 print('Please input initial setup!')
             initial_rho = initial_rho / np.sum(initial_rho)
@@ -100,11 +147,12 @@ class diffusionPersistence:
         return phi_state
 
     def quantum_diffusion(self):
+        "For large network, the matrix M should be saved"
         initial_condition = self.get_initial_condition()
         t = self.t
         dt = self.dt
         dx = self.alpha
-        A_interaction, index_j, cum_index, degree = self.A_interaction, self.index_j, self.cum_index, self.degree
+        degree = self.degree
         phi_state = np.zeros((len(t), len(self.A)), dtype=complex)
         phi_state[0] = initial_condition
         a = -degree + (4j * m * dx **2) /  (hbar * dt)
@@ -121,9 +169,9 @@ class diffusionPersistence:
     def test_qd_gausswave(self, dx, dt):
         x0 = 50
         x = np.arange(0, 100, dx)
-        t = np.arange(0, 100, dt)
-        p0 = 0.1
-        sigma = 5
+        t = np.arange(0, int(5000*dt), dt)
+        p0 = 0
+        sigma = 10
         phi_state = np.zeros((len(t), len(x) ), dtype=complex)
         phi_state[0] = 1/(np.pi**0.25 * sigma**0.5 ) * np.exp(-(x-x0)**2/2/sigma**2) * np.exp(1j  * p0 * x/ hbar  )
         psi_xt = np.zeros((len(t), len(x) ), dtype=complex)
@@ -260,6 +308,6 @@ if __name__ == '__main__':
         for N in N_list:
             dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, reference_line)
             #dp.get_dpp_parallel(cpu_number, seed_initial_condition_list)
-            dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
+            #dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
             pass
 

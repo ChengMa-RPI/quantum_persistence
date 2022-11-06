@@ -90,6 +90,8 @@ class persistenceAnalysis:
 
     def get_meta_data(self, seed_initial_condition, save_des=None):
         t, phi_state = self.read_phi(seed_initial_condition)
+        t = t[2:]
+        phi_state = phi_state[2:]
         t_length = len(t)
         N_actual = len(phi_state[0])
         dt = np.round(np.mean(np.diff(t)), 5)
@@ -212,7 +214,7 @@ class persistenceAnalysis:
         p_state = {} 
         for t_i in t_list:
             p, bins = np.histogram(phi[int(t_i/dt)], bin_num)
-            p_state[t_i]  = {'p':p.tolist(), 'bins':bins[:-1].tolist()}
+            p_state[t_i]  = {'p':p.tolist(), 'bins': (bins[:-1] + (bins[2]-bins[1])/2 ).tolist()}
         state_distribution = {'t': t[-1], 't_list': t_list, 'bin_num': bin_num, 'p_state': p_state}
         
         with open(save_file, 'w') as fp:
