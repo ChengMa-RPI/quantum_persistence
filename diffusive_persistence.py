@@ -1,5 +1,7 @@
 import os
 os.environ['OPENBLAS_NUM_THREADS'] ='1'
+os.environ['OMP_NUM_THREADS'] = '1'
+
 import sys
 sys.path.insert(1, '/home/mac/RPI/research/')
 from mutual_framework import network_generate
@@ -7,7 +9,6 @@ from mutual_framework import network_generate
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from tqdm import tqdm
 import multiprocessing as mp
 import pandas as pd 
 from scipy.linalg import inv as spinv
@@ -42,12 +43,12 @@ class diffusionPersistence:
         self.reference_line = reference_line
         self.seed_initial_condition = None
 
-        self.save_A_M()
+        self.save_read_A_M()  # save A and M to the disk if not yet; otherwise, read them from the disk. 
         self.degree = np.sum(self.A, 0)
         self.N_actual = len(self.A)
-        self.L = -self.A + np.diag(self.degree)
+        #self.L = -self.A + np.diag(self.degree)
 
-    def save_A_M(self):
+    def save_read_A_M(self):
         save_des = '../data/matrix_save/'
         topology_des = save_des + 'topology/'
         operator_des = save_des + 'quan_operator/'
@@ -55,19 +56,24 @@ class diffusionPersistence:
             if not os.path.exists(des):
                 os.makedirs(des)
 
-        file_topology = topology_des + 'network_type={self.network_type}_N={self.N}_d={self.d}_seed={self.seed}.npy'
-        file_operator = operator_des + 'network_type={self.network_type}_N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}.npy'
+        file_topology = topology_des + f'network_type={self.network_type}_N={self.N}_d={self.d}_seed={self.seed}.npy'
+        file_operator = operator_des + f'network_type={self.network_type}_N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}.npy'
         if os.path.exists(file_topology):
-            pass
-
+            A = np.load(file_topology)
+            A_index = np.where(A>0)
+            A_interaction = A[A_index]
+            index_i = A_index[0] 
+            index_j = A_index[1] 
+            degree = np.sum(A>0, 1)
+            cum_index = np.hstack((0, np.cumsum(degree)))
+            self.A, self.A_interaction, self.index_i, self.index_j, self.cum_index = A, A_interaction, index_i, index_j, cum_index
         else:
             self.A, self.A_interaction, self.index_i, self.index_j, self.cum_index = network_generate(network_type, N, 1, 0, seed, d) 
+            np.save(file_topology, self.A) 
 
         if os.path.exists(file_operator):
-            pass
-
+            self.M = np.load(file_operator)
         else:
-            t = self.t
             dt = self.dt
             dx = self.alpha
             degree = np.sum(self.A, 0)
@@ -77,8 +83,8 @@ class diffusionPersistence:
             B1 = - self.A  + np.diag(b)
             A1_inv = spinv(A1, check_finite=False)
             M = A1_inv.dot(B1)
+            self.M = M
             np.save(file_operator, M) 
-
 
 
     def get_initial_condition(self):
@@ -112,10 +118,27 @@ class diffusionPersistence:
             elif initial_setup == 'gaussian_wave':
                 sigma = 1
                 p0 = 1
-                x = np.arange(0, 10, 1/self.N)
+                x = np.arange(0, 10, 10/self.N)
                 x0 = np.round(x.mean(), 5)
                 initial_rho = (1/(np.pi**0.25 * sigma**0.5 ) * np.exp(-(x-x0)**2/2/sigma**2)  ) ** 2
                 initial_phase =  p0 * x/ hbar
+            elif initial_setup == 'sum_sin':
+                # 10 sin function with random amplitude, frequency, and phase 
+                amplitude = np.random.RandomState(seed_initial_condition).random(10)
+                frequency = np.random.RandomState(seed_initial_condition + 10).exponential(size=10)
+                # minimal resolution dx = 0.01
+                dx_min = 0.01
+                phase = np.random.RandomState(seed_initial_condition + 100).random(int(self.N_actual * self.alpha/ dx_min))
+                x = np.arange(0, int(self.N_actual * self.alpha), dx_min)
+                y = 0
+                for Ai, fi in zip(amplitude, frequency):
+                    y += Ai * np.sin(x * fi + phase) 
+                # normalize
+                rho_positive = y - y.min() + np.abs(np.mean(y) / 10)
+                interval = int(self.alpha / dx_min)
+                initial_rho = rho_positive[::interval]
+                initial_phase = y[::interval]
+
             else:
                 print('Please input initial setup!')
             initial_rho = initial_rho / np.sum(initial_rho)
@@ -133,7 +156,7 @@ class diffusionPersistence:
 
         """
         initial_condition = self.get_initial_condition()
-        L = self.L
+        #L = self.L
         t = self.t
         dt = self.dt
         alpha = self.alpha
@@ -152,15 +175,18 @@ class diffusionPersistence:
         t = self.t
         dt = self.dt
         dx = self.alpha
+        M = self.M
         degree = self.degree
         phi_state = np.zeros((len(t), len(self.A)), dtype=complex)
         phi_state[0] = initial_condition
+        """
         a = -degree + (4j * m * dx **2) /  (hbar * dt)
         b = degree + (4j * m * dx **2) /  (hbar * dt)
         A1 = self.A + np.diag(a)
         B1 = - self.A  + np.diag(b)
         A1_inv = spinv(A1, check_finite=False)
         M = A1_inv.dot(B1)
+        """
         for i in range(len(t)-1):
             phi_state[i+1] = M.dot(phi_state[i]) 
         rho = np.abs(phi_state) ** 2
@@ -169,8 +195,8 @@ class diffusionPersistence:
     def test_qd_gausswave(self, dx, dt):
         x0 = 50
         x = np.arange(0, 100, dx)
-        t = np.arange(0, int(5000*dt), dt)
-        p0 = 0
+        t = np.arange(0, 500, dt)
+        p0 = 1
         sigma = 10
         phi_state = np.zeros((len(t), len(x) ), dtype=complex)
         phi_state[0] = 1/(np.pi**0.25 * sigma**0.5 ) * np.exp(-(x-x0)**2/2/sigma**2) * np.exp(1j  * p0 * x/ hbar  )
@@ -188,6 +214,39 @@ class diffusionPersistence:
         for i in range(len(t)-1):
             phi_state[i+1] = M.dot(phi_state[i]) 
         return phi_state, psi_xt
+
+    def test_random_function(self, dx, dt):
+        t = np.arange(0, 100, dt)
+        A = np.random.RandomState(seed=1).random(10)
+        frequency = np.random.RandomState(seed=0).exponential(size=10)
+        x = np.arange(0, 100, 0.01)
+        phase = np.random.RandomState(seed=2).random(10000)
+        y = 0
+        for Ai, fi in zip(A, frequency):
+            y += Ai * np.sin(x * fi + phase) 
+        # normalize
+        amplitude = y - y.min() + np.abs(np.mean(y) / 10)
+
+        interval = int(dx / 0.01)
+        x = np.arange(0, 100, dx)
+        N = len(x)
+        select_amplitude = amplitude[::interval]
+        initial_rho = select_amplitude/ np.sum(select_amplitude)
+        initial_phase = y[::interval]
+
+        phi_state = np.zeros((len(t), len(x)), dtype=complex)
+        phi_state[0] = np.sqrt(initial_rho) * np.exp(1j * initial_phase)
+        
+        a = -2 + (4j * m * dx **2) /  (hbar * dt)
+        b = 2 + (4j * m * dx **2) /  (hbar * dt)
+        A = nx.to_numpy_array(nx.grid_graph(dim=[len(x)], periodic=False))
+        A1 = A + np.identity(len(x)) * a
+        B1 = -A  + np.identity(len(x)) * b
+        A1_inv = spinv(A1, check_finite=False)
+        M = A1_inv.dot(B1)
+        for i in range(len(t)-1):
+            phi_state[i+1] = M.dot(phi_state[i]) 
+        return phi_state
 
     def test_qd_dtdx(self, dt_list):
         self.seed_initial_condition = 0
@@ -304,10 +363,72 @@ if __name__ == '__main__':
     N_list = np.power(L_list, 2)
     N_list = np.arange(100, 200, 200)
     initial_setup = 'rho_uniform_phase_uniform'
+    initial_setup= 'sum_sin'
+    N_list = [100]
+    alpha = 1
     for reference_line in reference_lines:
         for N in N_list:
-            dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, reference_line)
+            #dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, reference_line)
             #dp.get_dpp_parallel(cpu_number, seed_initial_condition_list)
             #dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
             pass
 
+    N_list = [100, 1000, 10000]
+    alpha_list = [10, 1, 0.1]
+    dt_list = [100, 1, 0.01]
+    num_realization_list = [1, 1, 1]
+
+    t1 = time.time()
+    for N, alpha, dt, num_realization in zip(N_list, alpha_list, dt_list, num_realization_list):
+        seed_initial_condition_list = np.arange(num_realization)
+        t = np.arange(0, 10000*dt, dt)
+        dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, reference_line)
+        dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
+    t2 = time.time()
+
+
+
+
+    """
+    ### test gaussian wave evolution
+    dx_list = [5, 1, 1, 0.5, 0.1, 0.1]
+    dt_list = [5, 1, 0.1, 0.1, 0.1, 0.01]
+    phi_state_list = []
+    for dx, dt in zip(dx_list, dt_list):
+        phi_state, psi_xt = dp.test_qd_gausswave(dx, dt)
+        phi_state_list.append(phi_state)
+    t0 = 0
+    linestyles = ['-', '-', '--', '-', '-', '--']
+    for (i, dx), dt, phi_state in zip(enumerate(dx_list), dt_list, phi_state_list):
+        x = np.arange(0, 100, dx)
+        index = int(t0/dt)
+        plt.plot(x, np.abs(phi_state[index])**2, label=f'dx={dx} dt={dt}', linestyle = linestyles[i])
+    plt.plot(x, np.abs(psi_xt[index])**2, label='theory', linestyle='-.')
+    plt.xlabel('$x$', fontsize=17)
+    plt.ylabel('$\\rho$', fontsize=17)
+    plt.legend()
+    plt.title(f't={t0}')
+    plt.show()
+    """
+
+    """
+    ### generate a random continuous function
+    dx_list = [5, 1, 1, 0.5, 0.1, 0.1]
+    dt_list = [5, 1, 0.1, 0.1, 0.1, 0.01]
+    phi_state_list = []
+    for dx, dt in zip(dx_list, dt_list):
+        phi_state = dp.test_random_function(dx, dt)
+        phi_state_list.append(phi_state)
+    t0 = 10
+    linestyles = ['-', '-', '--', '-', '-', '--']
+    for (i, dx), dt, phi_state in zip(enumerate(dx_list), dt_list, phi_state_list):
+        x = np.arange(0, 100, dx)
+        index = int(t0/dt)
+        plt.plot(x, np.abs(phi_state[index])**2/ dx, label=f'dx={dx} dt={dt}', linestyle = linestyles[i])
+    plt.xlabel('$x$', fontsize=17)
+    plt.ylabel('$\\rho$', fontsize=17)
+    plt.legend()
+    plt.title(f't={t0}')
+    plt.show()
+
+    """
