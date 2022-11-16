@@ -146,6 +146,29 @@ class plotSignTime():
         #plt.savefig(save_des, format='png')
         #plt.close()
 
+    def plot_signtime_dxdt(self, tau, N_list, alpha_list, initial_setup, titles):
+        cols = len(initial_setup_list)
+        rows = 1
+        fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(4 * cols, 3.5 * rows))
+        for (i, initial_setup), title in zip(enumerate(initial_setup_list), titles):
+            ax = axes[i]
+            simpleaxis(ax)
+            self.initial_setup = initial_setup
+            self.plot_sign_time_distribution(ax, tau, 'above')
+            self.plot_sign_time_distribution(ax, tau, 'below')
+            ax.tick_params(axis='both', which='major', labelsize=13)
+            ax.set_title(title, size=labelsize*0.5)
+
+
+        #ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.23, 0.09) ) 
+        ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.19, 0.79) ) 
+        fig.text(x=0.02, y=0.5, horizontalalignment='center', s="$P(\\tau/t)$", size=labelsize*0.6, rotation=90)
+        fig.text(x=0.5, y=0.01, horizontalalignment='center', s="$\\tau/t$", size=labelsize*0.6)
+        fig.subplots_adjust(left=0.1, right=0.95, wspace=0.25, hspace=0.25, bottom=0.2, top=0.90)
+        #save_des = '../manuscript/dimension_reduction_v3_072422/' + self.dynamics + '_' + self.network_type + f'_tau_c_m.png'
+        #plt.savefig(save_des, format='png')
+        #plt.close()
+
 
         
 

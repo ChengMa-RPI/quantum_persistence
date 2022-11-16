@@ -122,13 +122,16 @@ class diffusionPersistence:
                 x0 = np.round(x.mean(), 5)
                 initial_rho = (1/(np.pi**0.25 * sigma**0.5 ) * np.exp(-(x-x0)**2/2/sigma**2)  ) ** 2
                 initial_phase =  p0 * x/ hbar
-            elif initial_setup == 'sum_sin':
+            elif initial_setup == 'sum_sin' or initial_setup == 'sum_sin_inphase':
                 # 10 sin function with random amplitude, frequency, and phase 
                 amplitude = np.random.RandomState(seed_initial_condition).random(10)
                 frequency = np.random.RandomState(seed_initial_condition + 10).exponential(size=10)
                 # minimal resolution dx = 0.01
                 dx_min = 0.01
                 phase = np.random.RandomState(seed_initial_condition + 100).random(int(self.N_actual * self.alpha/ dx_min))
+                if initial_setup == 'sum_sin_inphase':
+                    phase = 0
+                    #frequency = np.random.RandomState(seed_initial_condition + 10).random(size=10) # less up and down
                 x = np.arange(0, int(self.N_actual * self.alpha), dx_min)
                 y = 0
                 for Ai, fi in zip(amplitude, frequency):
@@ -197,7 +200,7 @@ class diffusionPersistence:
         x = np.arange(0, 100, dx)
         t = np.arange(0, 500, dt)
         p0 = 1
-        sigma = 10
+        sigma = 15
         phi_state = np.zeros((len(t), len(x) ), dtype=complex)
         phi_state[0] = 1/(np.pi**0.25 * sigma**0.5 ) * np.exp(-(x-x0)**2/2/sigma**2) * np.exp(1j  * p0 * x/ hbar  )
         psi_xt = np.zeros((len(t), len(x) ), dtype=complex)
@@ -206,7 +209,7 @@ class diffusionPersistence:
 
         a = -2 + (4j * m * dx **2) /  (hbar * dt)
         b = 2 + (4j * m * dx **2) /  (hbar * dt)
-        A = nx.to_numpy_array(nx.grid_graph(dim=[len(x)], periodic=False))
+        A = nx.to_numpy_array(nx.grid_graph(dim=[len(x)], periodic=True))
         A1 = A + np.identity(len(x)) * a
         B1 = -A  + np.identity(len(x)) * b
         A1_inv = spinv(A1, check_finite=False)
@@ -219,8 +222,10 @@ class diffusionPersistence:
         t = np.arange(0, 100, dt)
         A = np.random.RandomState(seed=1).random(10)
         frequency = np.random.RandomState(seed=0).exponential(size=10)
+        frequency = np.random.RandomState(seed=0).random(size=10)
         x = np.arange(0, 100, 0.01)
         phase = np.random.RandomState(seed=2).random(10000)
+        phase = 0
         y = 0
         for Ai, fi in zip(A, frequency):
             y += Ai * np.sin(x * fi + phase) 
@@ -326,7 +331,7 @@ class diffusionPersistence:
             des = '../data/classical/state/' + self.network_type + '/' 
         if not os.path.exists(des):
             os.makedirs(des)
-        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_setup={self.initial_setup}_seed_initial='
+        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_seed_initial='
         p = mp.Pool(cpu_number)
         p.starmap_async(self.get_phi_state,  [(seed_initial_condition, save_file + f'{seed_initial_condition}') for seed_initial_condition in seed_initial_condition_list]).get()
         p.close()
@@ -368,28 +373,34 @@ if __name__ == '__main__':
     alpha = 1
     for reference_line in reference_lines:
         for N in N_list:
-            #dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, reference_line)
+            dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, reference_line)
             #dp.get_dpp_parallel(cpu_number, seed_initial_condition_list)
             #dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
             pass
 
-    N_list = [100, 1000, 10000]
-    alpha_list = [10, 1, 0.1]
-    dt_list = [100, 1, 0.01]
-    num_realization_list = [1, 1, 1]
+
+
+
+    N_list = [100, 100, 100, 1000, 1000, 1000, 10000]
+    alpha_list = [10, 10, 10, 1, 1, 1, 0.1]
+    dt_list = [100, 1, 0.1, 10, 1, 0.1, 0.1 ]
+    num_realization_list = [1000, 1000, 1000, 100, 100, 100, 10]
+
+    N_list = [100, 100, 100, 1000, 1000]
+    alpha_list = [0.1, 0.1, 0.1, 0.01, 0.01]
+    dt_list = [0.01, 0.1, 1, 0.001, 0.01]
+    num_realization_list = [100] * 5
 
     t1 = time.time()
     for N, alpha, dt, num_realization in zip(N_list, alpha_list, dt_list, num_realization_list):
         seed_initial_condition_list = np.arange(num_realization)
         t = np.arange(0, 10000*dt, dt)
-        dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, reference_line)
-        dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
+        #dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, reference_line)
+        #dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
     t2 = time.time()
 
 
 
-
-    """
     ### test gaussian wave evolution
     dx_list = [5, 1, 1, 0.5, 0.1, 0.1]
     dt_list = [5, 1, 0.1, 0.1, 0.1, 0.01]
@@ -409,7 +420,6 @@ if __name__ == '__main__':
     plt.legend()
     plt.title(f't={t0}')
     plt.show()
-    """
 
     """
     ### generate a random continuous function

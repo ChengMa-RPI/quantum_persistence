@@ -1,5 +1,7 @@
 import os
 os.environ['OPENBLAS_NUM_THREADS'] ='1'
+os.environ['OMP_NUM_THREADS'] = '1'
+
 import sys
 sys.path.insert(1, '/home/mac/RPI/research/')
 from mutual_framework import network_generate
@@ -7,7 +9,6 @@ from mutual_framework import network_generate
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from tqdm import tqdm
 import multiprocessing as mp
 import pandas as pd 
 from scipy.linalg import inv as spinv
@@ -18,7 +19,7 @@ import json
 
 
 class persistenceAnalysis:
-    def __init__(self, quantum_or_not, network_type, N, d, seed, alpha, initial_setup, reference_line):
+    def __init__(self, quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, reference_line):
         """TODO: Docstring for __init__.
 
         :quantum_not: TODO
@@ -37,6 +38,7 @@ class persistenceAnalysis:
         self.d = d
         self.seed = seed
         self.alpha = alpha
+        self.dt = dt
         self.initial_setup = initial_setup
         self.reference_line = reference_line
         self.seed_initial_condition = None
@@ -46,7 +48,7 @@ class persistenceAnalysis:
             des = '../data/quantum/state/' + self.network_type + '/' 
         else:
             des = '../data/classical/state/' + self.network_type + '/' 
-        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_setup={self.initial_setup}_seed_initial={seed_initial_condition}.npy'
+        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_seed_initial={seed_initial_condition}.npy'
         data = np.load(save_file)
         t, phi = data[:, 0], data[:, 1:]
         return t, phi
@@ -56,7 +58,7 @@ class persistenceAnalysis:
             des = '../data/quantum/meta_data/' + self.network_type + '/' 
         else:
             des = '../data/classical/meta_data/' + self.network_type + '/' 
-        filename = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial={seed_initial_condition}.json'
+        filename = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial={seed_initial_condition}.json'
         f = open(filename)
         meta_data = json.load(f)
         return meta_data
@@ -178,11 +180,11 @@ class persistenceAnalysis:
             des = '../data/quantum/persistence/' + self.network_type + '/' 
         else:
             des = '../data/classical/persistence/' + self.network_type + '/' 
-        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial='
+        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial='
         if not os.path.exists(des):
             os.makedirs(des)
         p = mp.Pool(cpu_number)
-        p.starmap_async(self.diffusive_persistence_prob,  [(seed_initial_condition, save_file + f'{seed_initial_condition}.csv') for seed_initial_condition in seed_initial_condition_list]).get()
+        p.starmap_async(self.diffusive_persistence,  [(seed_initial_condition, save_file + f'{seed_initial_condition}.csv') for seed_initial_condition in seed_initial_condition_list]).get()
         p.close()
         p.join()
         return None
@@ -192,7 +194,7 @@ class persistenceAnalysis:
             des = '../data/quantum/meta_data/' + self.network_type + '/' 
         else:
             des = '../data/classical/meta_data/' + self.network_type + '/' 
-        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial='
+        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial='
         if not os.path.exists(des):
             os.makedirs(des)
         p = mp.Pool(cpu_number)
@@ -201,12 +203,12 @@ class persistenceAnalysis:
         p.join()
         return None
 
-    def get_state_distribution(self, seed_initial_condition, t_list, bin_num = 101):
+    def get_state_distribution(self, seed_initial_condition, t_list, bin_num = 100):
         if self.quantum_or_not:
             des = '../data/quantum/state_distribution/' + self.network_type + '/' 
         else:
             des = '../data/classical/state_distribution/' + self.network_type + '/' 
-        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial={seed_initial_condition}.json'
+        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial={seed_initial_condition}.json'
         if not os.path.exists(des):
             os.makedirs(des)
         t, phi = self.read_phi(seed_initial_condition)
@@ -214,7 +216,7 @@ class persistenceAnalysis:
         p_state = {} 
         for t_i in t_list:
             p, bins = np.histogram(phi[int(t_i/dt)], bin_num)
-            p_state[t_i]  = {'p':p.tolist(), 'bins': (bins[:-1] + (bins[2]-bins[1])/2 ).tolist()}
+            p_state[t_i]  = {'p':p.tolist(), 'bins':(bins[:-1] + (bins[2]-bins[1])/2).tolist()}
         state_distribution = {'t': t[-1], 't_list': t_list, 'bin_num': bin_num, 'p_state': p_state}
         
         with open(save_file, 'w') as fp:
@@ -231,9 +233,19 @@ hbar = 0.6582
 
 
 if __name__ == '__main__':
-    quantum_or_not = True
     network_type = '1D'
-    N = 100
+    quantum_or_not = False
+    initial_setup = 'uniform_random'
+    quantum_or_not = True
+    initial_setup = 'rho_uniform_phase_const_pi_quater'
+    initial_setup = 'rho_uniform_phase_const_pi_half'
+    initial_setup = 'gaussian_wave'
+    initial_setup = 'rho_uniform_phase_const_pi'
+    initial_setup = 'rho_const_phase_uniform'
+    initial_setup = 'sum_sin_inphase'
+    initial_setup = 'sum_sin'
+    initial_setup = 'rho_uniform_phase_uniform'
+    N = 10000
     d = 4
     seed = 0
     alpha = 1
@@ -245,16 +257,26 @@ if __name__ == '__main__':
     L_list = np.arange(10, 40, 10)
     N_list = np.power(L_list, 2)
     N_list = np.arange(100, 200, 200)
-    initial_setup = 'uniform_random'
-    initial_setup = 'rho_uniform_phase_uniform'
+
+    alpha_list = [10, 10, 10, 1, 1, 1, 0.1]
+    N_list = [100, 100, 100, 1000, 1000, 1000, 10000]
+    dt_list = [100, 1, 0.1, 10, 1, 0.1, 0.1]
+    num_realization_list = [1000, 1000, 1000, 100, 100, 100, 10]
+
+    alpha_list = [0.1, 0.1 ,0.1, 0.01, 0.01]
+    N_list = [100, 100, 100, 1000, 1000]
+    dt_list = [1, 0.1, 0.01, 0.01, 0.001]
+    num_realization_list = [100] * 5
+
     for reference_line in reference_lines:
-        for N in N_list:
-            pA = persistenceAnalysis(quantum_or_not, network_type, N, d, seed, alpha, initial_setup, reference_line)
-            #pA.get_dpp_parallel(cpu_number, seed_initial_condition_list)
-            #pA.get_meta_data_parallel(cpu_number, seed_initial_condition_list)
-            seed_initial_condition = 0
-            t_list = [0, 10, 50, 100, 200]
-            t_list = np.arange(0, 200, 5).tolist()
-            pA.get_state_distribution(seed_initial_condition, t_list)
+        for N, alpha, dt, num_realization in zip(N_list, alpha_list, dt_list, num_realization_list):
+            seed_initial_condition_list = np.arange(num_realization)
+            pA = persistenceAnalysis(quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, reference_line)
+            pA.get_meta_data_parallel(cpu_number, seed_initial_condition_list)
+            pA.get_dpp_parallel(cpu_number, seed_initial_condition_list)
+            t_list = np.round(np.arange(0, 100, 0.5), 1).tolist()
+            for seed_initial_condition in seed_initial_condition_list:
+                #pA.get_state_distribution(seed_initial_condition, t_list)
+                pass
             pass
 

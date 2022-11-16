@@ -15,6 +15,10 @@ def transfer_files(directory, filenames):
 
     server_des = '/home/mac6/RPI/research/quantum_se/data/' 
     local_des = '/home/mac/RPI/research/quantum_se/data/'
+
+    server_des = '/home/mac6/RPI/research/quantum_se/code' 
+    local_des = '/home/mac/RPI/research/quantum_se/code_copy'
+
     if not os.path.exists(local_des):
         os.makedirs(local_des)
     sftp = client.open_sftp()
@@ -26,6 +30,7 @@ def transfer_files(directory, filenames):
         sftp.get(server_des + directory + i, local_des + directory +i)
         #sftp.put(local_des + directory +i, server_des + directory + i)
     sftp.close()
+
 
 
 quantum_or_not = True
@@ -42,5 +47,7 @@ if not os.path.exists(des):
     os.makedirs(des)
 
 des = '../transfer_figure/'
+des = '/'
+
 
 transfer_files(des, [])
