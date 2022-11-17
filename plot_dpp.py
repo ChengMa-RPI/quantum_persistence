@@ -74,8 +74,23 @@ def simpleaxis(ax):
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()
 
+def title_name(params):
+    rho_start, rho_end, phase_start, phase_end = params
+    if rho_start == rho_end:
+        rho_title = '$\\rho = C$'
+    else:
+        rho_title = '$\\rho \sim \\mathcal{U}$' + f'({rho_start * 2}/N, {rho_end * 2}/N)'
+
+    if phase_start == phase_end:
+        phase_title = '$\\theta = C$'
+    else:
+        phase_title = '$\\theta \sim \\mathcal{U}$' + f'({phase_start } $\\pi$, {phase_end } $\\pi$)'
+    return rho_title  + ', ' + phase_title
+
+
+
 class Plot_Dpp():
-    def __init__(self, quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, seed_initial_condition_list, reference_line):
+    def __init__(self, quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, distribution_params,  seed_initial_condition_list, reference_line):
         self.quantum_or_not = quantum_or_not
         self.network_type = network_type
         self.N = N
@@ -84,6 +99,7 @@ class Plot_Dpp():
         self.alpha = alpha
         self.dt = dt
         self.initial_setup = initial_setup
+        self.distribution_params = distribution_params
         self.seed_initial_condition_list = seed_initial_condition_list
         self.reference_line = reference_line
 
@@ -102,7 +118,7 @@ class Plot_Dpp():
         PA = []
         PB = []
         for seed_initial_condition in self.seed_initial_condition_list:
-            filename = f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial={seed_initial_condition}.csv'
+            filename = f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_params={self.distribution_params}_reference={self.reference_line}_seed_initial={seed_initial_condition}.csv'
             data = np.array(pd.read_csv(des + filename, header=None))
             t, pa, pb = data[1:, 0], data[1:, 1], data[1:, 2]
             PA.append(pa)
@@ -196,7 +212,7 @@ class Plot_Dpp():
     def plot_dpp_t_initial_setup(self, ax, N, pa_or_pb, label):
         t, PA_ave, PB_ave, P_ave = self.read_dpp()
         #t = t/ self.alpha **2
-        index = np.where(t < 10)[0]
+        index = np.where(t < 500)[0]
         #index = np.where(t <1e5)[0]
         t = t[index]
         PA_ave = PA_ave[index]
@@ -220,29 +236,34 @@ class Plot_Dpp():
             ax.semilogy(t, P_ave, label=label)
 
 
-    def plot_pa_pb_initial_setup(self, N, initial_setup_list, titles):
+    def plot_pa_pb_initial_setup(self, N, distribution_params_list):
         cols = 2
         rows = 1
         fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(4 * cols, 3.5 * rows))
         for j, pa_or_pb in enumerate(['pa', 'pb']):
             ax = axes[j]
             simpleaxis(ax)
-            for initial_setup, label in zip(initial_setup_list, titles):
-                self.initial_setup = initial_setup
+            for distribution_params in distribution_params_list:
+                self.distribution_params = distribution_params
+                label = title_name(distribution_params)
                 self.plot_dpp_t_initial_setup(ax, N, pa_or_pb, label)
                 ax.tick_params(axis='both', which='major', labelsize=13)
                 #ax.set_ylim(7e-2, 1)
 
-
-        #ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.23, 0.09) ) 
-        ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.09, 0.59) ) 
+        ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(2.19, 0.3) ) 
         fig.text(x=0.02, y=0.5, horizontalalignment='center', s="$P_a$", size=labelsize*0.6, rotation=90)
-        fig.text(x=0.52, y=0.5, horizontalalignment='center', s="$P_b$", size=labelsize*0.6, rotation=90)
-        fig.text(x=0.5, y=0.01, horizontalalignment='center', s="$t$", size=labelsize*0.6)
-        fig.subplots_adjust(left=0.1, right=0.95, wspace=0.25, hspace=0.25, bottom=0.1, top=0.95)
-        #save_des = '../manuscript/dimension_reduction_v3_072422/' + self.dynamics + '_' + self.network_type + f'_tau_c_m.png'
-        #plt.savefig(save_des, format='png')
-        #plt.close()
+        fig.text(x=0.35, y=0.5, horizontalalignment='center', s="$P_b$", size=labelsize*0.6, rotation=90)
+        #fig.text(x=0.37, y=0.01, horizontalalignment='center', s="$t / (\\Delta x) ^2$", size=labelsize*0.6)
+        fig.text(x=0.37, y=0.01, horizontalalignment='center', s="$t$", size=labelsize*0.6)
+        fig.subplots_adjust(left=0.1, right=0.69, wspace=0.25, hspace=0.25, bottom=0.2, top=0.95)
+        #save_des = f'../transfer_figure/dpp_{self.initial_setup}_t.png'
+        save_des = f'../transfer_figure/dpp_N={self.N}.png'
+        plt.savefig(save_des, format='png')
+        plt.close()
+        return 
+
+
+
 
     def plot_pa_pb_alpha_dt(self, N_list, alpha_list, dt_list, num_realization_list, initial_setup_list):
         cols = 2
@@ -282,43 +303,48 @@ if __name__ == '__main__':
     initial_setup = 'rho_const_phase_uniform'
     initial_setup = 'sum_sin_inphase'
     initial_setup = 'sum_sin'
-    initial_setup = 'rho_uniform_phase_uniform'
+    initial_setup = 'uniform_random'
+    distribution_params = [0, 1, -1, -1]
     network_type = '1D'
-    N = 10000
+    N = 100
     d = 4
     seed = 0
     alpha = 1
-    reference_line = 0.8
     reference_line = 'average'
-    seed_initial_condition_list = np.arange(0, 10, 1)
+    seed_initial_condition_list = np.arange(0, 100, 1)
     dt = 1
-    pdpp = Plot_Dpp(quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, seed_initial_condition_list, reference_line)
+    pdpp = Plot_Dpp(quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, distribution_params, seed_initial_condition_list, reference_line)
     #pdpp.plot_dpp_t()
+
     L_list = np.arange(10, 40, 10)
     N_list = np.power(L_list, 2)
     N_list = [100, 300, 500]
 
     #pdpp.plot_dpp_scaling(N_list)
-    N_list = [10000]
+    N_list = [100]
     reference_lines = ['average']
     #pdpp.plot_pa_pb_reference(N_list, reference_lines)
 
-    N = 10000
-    initial_setup_list = ['rho_uniform_phase_uniform', 'rho_const_phase_uniform', 'rho_uniform_phase_const_pi']
-    titles = ['uniform random', 'const $\\rho$', 'const $\\theta$']
-    #pdpp.plot_pa_pb_initial_setup(N, initial_setup_list, titles)
+    distribution_params_raw = [[0, 1, 1, 1], [1, 1, -1, 1], [1/4, 3/4, 0, 0], [3/8, 5/8, 0, 0] ]
+
+    distribution_params_list = []
+    for i in distribution_params_raw:
+        distribution_params_list.append( [round(j, 3) for j in i])
 
 
+    pdpp.plot_pa_pb_initial_setup(N, distribution_params_list)
+
+
+
+
+    "test dx dt"
     N_list = [100, 100, 1000, 1000, 1000, 10000]
     alpha_list = [10, 10, 1, 1, 1, 0.1]
     dt_list = [100, 1, 10, 1, 0.1, 0.01]
     num_realization_list = [1000, 1000, 100, 100, 100, 10]
 
-    N_list = [100, 100, 100, 1000, 1000]
-    alpha_list = [0.1, 0.1, 0.1, 0.01, 0.01]
-    dt_list = [0.01, 0.1, 1, 0.001, 0.01]
-    num_realization_list = [100] * 5
 
-    pdpp.plot_pa_pb_alpha_dt(N_list, alpha_list, dt_list, num_realization_list, initial_setup)
+
+    #pdpp.plot_pa_pb_alpha_dt(N_list, alpha_list, dt_list, num_realization_list, initial_setup)
 
 

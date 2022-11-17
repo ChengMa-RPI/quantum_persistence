@@ -18,7 +18,7 @@ import networkx as nx
 
 
 class diffusionPersistence:
-    def __init__(self, quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, reference_line):
+    def __init__(self, quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, distribution_params, reference_line):
         """TODO: Docstring for __init__.
 
         :quantum_not: TODO
@@ -40,6 +40,7 @@ class diffusionPersistence:
         self.t = t
         self.dt = dt
         self.initial_setup = initial_setup
+        self.distribution_params = distribution_params
         self.reference_line = reference_line
         self.seed_initial_condition = None
 
@@ -94,27 +95,25 @@ class diffusionPersistence:
         """
         seed_initial_condition = self.seed_initial_condition
         initial_setup = self.initial_setup
-        average = 1 / self.N_actual
+        N_actual = self.N_actual
+        average = 1 / N_actual
         if quantum_or_not == 0:
             if initial_setup == 'uniform_random':
-                initial_condition = np.random.RandomState(seed_initial_condition).uniform(0, 1, size = self.N_actual)
+                initial_condition = np.random.RandomState(seed_initial_condition).uniform(0, 1, size = N_actual)
                 initial_condition = initial_condition / np.sum(initial_condition)
         else:
-            if initial_setup == 'rho_uniform_phase_uniform':
-                initial_rho = np.random.RandomState(seed_initial_condition).uniform(0, 1, size=self.N_actual)
-                initial_phase = np.random.RandomState(seed_initial_condition).uniform(0, 2 * np.pi, size = self.N_actual)
-            elif initial_setup == 'rho_const_phase_uniform':
-                initial_phase = np.random.RandomState(seed_initial_condition).uniform(0, 2 * np.pi, size = self.N_actual)
-                initial_rho = np.ones(self.N_actual) 
-            elif initial_setup == 'rho_uniform_phase_const_pi':
-                initial_rho = np.random.RandomState(seed_initial_condition).uniform(0, 1, size=self.N_actual)
-                initial_phase = np.pi
-            elif initial_setup == 'rho_uniform_phase_const_pi_half':
-                initial_rho = np.random.RandomState(seed_initial_condition).uniform(0, 1, size=self.N_actual)
-                initial_phase = np.pi/2
-            elif initial_setup == 'rho_uniform_phase_const_pi_quater':
-                initial_rho = np.random.RandomState(seed_initial_condition).uniform(0, 1, size=self.N_actual)
-                initial_phase = np.pi/4
+            if initial_setup == 'uniform_random':
+                rho_start, rho_end, phase_start, phase_end = self.distribution_params
+                if rho_start == rho_end:
+                    initial_rho = np.ones(N_actual) * rho_start
+                else:
+                    initial_rho = np.random.RandomState(seed_initial_condition).uniform(rho_start, rho_end, size=self.N_actual)
+                if phase_start == phase_end:
+                    initial_phase = np.ones(N_actual) * phase_start * np.pi
+                else:
+                    initial_phase = np.random.RandomState(seed_initial_condition).uniform(phase_start * np.pi, phase_end * np.pi, size = self.N_actual)
+
+
             elif initial_setup == 'gaussian_wave':
                 sigma = 1
                 p0 = 1
@@ -145,7 +144,7 @@ class diffusionPersistence:
             else:
                 print('Please input initial setup!')
             initial_rho = initial_rho / np.sum(initial_rho)
-            initial_A = np.sqrt( initial_rho)
+            initial_A = np.sqrt(initial_rho)
             initial_condition = initial_A * np.exp(1j * initial_phase)
         return initial_condition
 
@@ -192,8 +191,9 @@ class diffusionPersistence:
         """
         for i in range(len(t)-1):
             phi_state[i+1] = M.dot(phi_state[i]) 
+        phase = np.angle(phi_state) 
         rho = np.abs(phi_state) ** 2
-        return rho
+        return rho, phase
 
     def test_qd_gausswave(self, dx, dt):
         x0 = 50
@@ -263,77 +263,36 @@ class diffusionPersistence:
             rho_list.append(rho)
         return rho_list
 
-
     def get_phi_state(self, seed_initial_condition, save_des=None):
         self.seed_initial_condition = seed_initial_condition
         if quantum_or_not:
-            phi_state = self.quantum_diffusion()
+            data = self.quantum_diffusion()
+            #data = [rho, phase]
         else:
             phi_state = self.classic_diffusion()
-        if save_des:
-            data = np.hstack(( self.t.reshape(len(self.t), 1), phi_state )) 
-            np.save(save_des, data) 
-        return phi_state
+            data = [phi_state]
+        for file_i, data_i in zip(save_des, data):
+            data_save = np.hstack(( self.t.reshape(len(self.t), 1), data_i )) 
+            np.save(file_i, data_save) 
+        return data
         
-    def diffusive_persistence_prob(self, seed_initial_condition):
-        t, dt = self.t, self.dt
-        phi_state = self.get_phi_state(seed_initial_condition)
-        reference_value = 1/ self.N_actual
-        if reference_line != 'average':
-            reference_value *= float(reference_line) 
-        mask_above = np.heaviside(phi_state - reference_value, 0)
-        mask_below = mask_above == 0
-        first_above = np.where(mask_above.any(axis=0), mask_above.argmax(axis=0), -1) * dt
-        first_below = np.where(mask_below.any(axis=0), mask_below.argmax(axis=0), -1) * dt
-        always_above = np.sum(first_below < 0)
-        always_below = np.sum(first_above < 0)
-        na = np.zeros(( len(t) ))
-        nb = np.zeros(( len(t) ))
-        for i, t_i in enumerate(t):
-            na[i] = np.sum(first_below > t_i)
-            nb[i] = np.sum(first_above > t_i)
-        na += always_above
-        nb += always_below
-        pa = na / self.N_actual
-        pb = nb / self.N_actual
-        return pa, pb
-
-    def save_dpp(self, seed_initial_condition, des):
-        """TODO: Docstring for save_dpp.
-
-        :arg1: TODO
-        :returns: TODO
-
-        """
-        pa, pb = self.diffusive_persistence_prob(seed_initial_condition)
-        des_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_seed_initial={seed_initial_condition}_setup={self.initial_setup}_reference={self.reference_line}.csv'
-        df = pd.DataFrame(np.vstack(( self.t, pa, pb )).transpose()) 
-        df.to_csv(des_file, index=None, header=None)
-
-    def get_dpp_parallel(self, cpu_number, seed_initial_condition_list):
-        if self.quantum_or_not:
-            des = '../data/quantum/' + self.network_type + '/' 
-        else:
-            des = '../data/classical/' + self.network_type + '/' 
-
-        if not os.path.exists(des):
-            os.makedirs(des)
-        p = mp.Pool(cpu_number)
-        p.starmap_async(self.save_dpp,  [(seed_initial_condition, des) for seed_initial_condition in seed_initial_condition_list]).get()
-        p.close()
-        p.join()
-        return None
 
     def save_phi_parallel(self, cpu_number, seed_initial_condition_list):
         if self.quantum_or_not:
-            des = '../data/quantum/state/' + self.network_type + '/' 
+            des_state = '../data/quantum/state/' + self.network_type + '/' 
+            des_phase = '../data/quantum/phase/' + self.network_type + '/' 
+            des_list = [des_state, des_phase]
         else:
             des = '../data/classical/state/' + self.network_type + '/' 
-        if not os.path.exists(des):
-            os.makedirs(des)
-        save_file = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_seed_initial='
+            des_list = [des]
+        save_file = []
+        for des in des_list:
+            if not os.path.exists(des):
+                os.makedirs(des)
+            save_file.append(des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_params={self.distribution_params}_seed_initial=' )
+
         p = mp.Pool(cpu_number)
-        p.starmap_async(self.get_phi_state,  [(seed_initial_condition, save_file + f'{seed_initial_condition}') for seed_initial_condition in seed_initial_condition_list]).get()
+        p.starmap_async(self.get_phi_state,  [(seed_initial_condition, [file_i + f'{seed_initial_condition}' for file_i in save_file]) for seed_initial_condition in seed_initial_condition_list]).get()
         p.close()
         p.join()
         return None
@@ -368,39 +327,34 @@ if __name__ == '__main__':
     N_list = np.power(L_list, 2)
     N_list = np.arange(100, 200, 200)
     initial_setup = 'rho_uniform_phase_uniform'
-    initial_setup= 'sum_sin'
+    initial_setup = 'uniform_random'
+    distribution_params_raw = [[0, 1, 1, 1], [1, 1, -1, 1] ]
+
+
+    distribution_params_list = []
+    for i in distribution_params_raw:
+        distribution_params_list.append( [round(j, 3) for j in i])
+
+    
+
+
     N_list = [100]
-    alpha = 1
-    for reference_line in reference_lines:
-        for N in N_list:
-            dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, reference_line)
-            #dp.get_dpp_parallel(cpu_number, seed_initial_condition_list)
-            #dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
-            pass
-
-
-
-
-    N_list = [100, 100, 100, 1000, 1000, 1000, 10000]
-    alpha_list = [10, 10, 10, 1, 1, 1, 0.1]
-    dt_list = [100, 1, 0.1, 10, 1, 0.1, 0.1 ]
-    num_realization_list = [1000, 1000, 1000, 100, 100, 100, 10]
-
-    N_list = [100, 100, 100, 1000, 1000]
-    alpha_list = [0.1, 0.1, 0.1, 0.01, 0.01]
-    dt_list = [0.01, 0.1, 1, 0.001, 0.01]
-    num_realization_list = [100] * 5
-
+    alpha_list = [1]
+    dt_list = [1]
+    num_realization_list = [100]
+    
     t1 = time.time()
     for N, alpha, dt, num_realization in zip(N_list, alpha_list, dt_list, num_realization_list):
         seed_initial_condition_list = np.arange(num_realization)
         t = np.arange(0, 10000*dt, dt)
-        #dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, reference_line)
-        #dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
+        for distribution_params in distribution_params_list:
+            dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, distribution_params, reference_line)
+            dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
     t2 = time.time()
 
 
 
+    """
     ### test gaussian wave evolution
     dx_list = [5, 1, 1, 0.5, 0.1, 0.1]
     dt_list = [5, 1, 0.1, 0.1, 0.1, 0.01]
@@ -420,6 +374,7 @@ if __name__ == '__main__':
     plt.legend()
     plt.title(f't={t0}')
     plt.show()
+    """
 
     """
     ### generate a random continuous function

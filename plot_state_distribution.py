@@ -47,24 +47,48 @@ def simpleaxis(ax):
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()
 
+def title_name(params):
+    rho_start, rho_end, phase_start, phase_end = params
+    if rho_start == rho_end:
+        rho_title = '$\\rho = C$'
+    else:
+        rho_title = '$\\rho \sim \\mathcal{U}$' + f'({rho_start * 2}/N, {rho_end * 2}/N)'
+
+    if phase_start == phase_end:
+        phase_title = '$\\theta = C$'
+    else:
+        phase_title = '$\\theta \sim \\mathcal{U}$' + f'({phase_start } $\\pi$, {phase_end } $\\pi$)'
+    return rho_title  + ', ' + phase_title
+
+
+
 class plotStateDistribution():
-    def __init__(self, quantum_or_not, network_type, N, d, seed, alpha, initial_setup, seed_initial_condition_list, reference_line):
+    def __init__(self, quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, distribution_params, seed_initial_condition_list, reference_line, rho_or_phase):
         self.quantum_or_not = quantum_or_not
         self.network_type = network_type
         self.N = N
         self.d = d
         self.seed = seed
         self.alpha = alpha
+        self.dt = dt
         self.initial_setup = initial_setup
+        self.distribution_params = distribution_params
         self.seed_initial_condition_list = seed_initial_condition_list
         self.reference_line = reference_line
+        self.rho_or_phase = rho_or_phase
 
     def read_state_distribution(self, seed_initial_condition):
         if self.quantum_or_not:
-            des = '../data/quantum/state_distribution/' + self.network_type + '/' 
+            if self.rho_or_phase == 'rho':
+                des = '../data/quantum/state_distribution/' + self.network_type + '/' 
+            elif self.rho_or_phase == 'phase':
+                des = '../data/quantum/phase_distribution/' + self.network_type + '/' 
+            else:
+                print('Please specify the state type')
+                return 
         else:
             des = '../data/classical/state_distribution/' + self.network_type + '/' 
-        filename = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial={seed_initial_condition}.json'
+        filename = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_params={self.distribution_params}_reference={self.reference_line}_seed_initial={seed_initial_condition}.json'
         f = open(filename)
         state_distribution = json.load(f)
         return state_distribution
@@ -86,51 +110,53 @@ class plotStateDistribution():
             p, bins = np.histogram(data_list[t_i], bins=bins_num)
             p = p / self.N / len(seed_initial_condition_list)
             
-            ax.semilogy(bins[:-1] - 1/self.N , p, '-', label='t=' + str(t_i) )
+            if self.rho_or_phase == 'phase':
+                ax.semilogy(bins[:-1] / np.pi , p, '-', label='t=' + str(t_i) )
+            else:
+                ax.semilogy(bins[:-1] - 1/self.N , p, '-', label='t=' + str(t_i) )
         if self.quantum_or_not == True:
             state = '$\\rho$'
         else:
             state = '$\\psi$'
 
-        #ax.xlabel(state, fontsize=labelsize * 0.5)
-        #ax.ylabel('$P$(' + state +')', fontsize=labelsize * 0.5)
         plt.legend(frameon=False)
         plt.locator_params(axis='x', nbins=4)
-        #plt.savefig('../report/report100422/' + 'F4.png')
-        #plt.close()
         return state_distribution
 
-    def plot_statedis_initial_setup(self, initial_setup_list, seed_initial_condition_list, t_list):
-        cols = len(initial_setup_list)
-        rows = 1
+    def plot_statedis_initial_setup(self, distribution_params_list, seed_initial_condition_list, t_list):
+        cols = len(distribution_params_list) // 2
+        rows = 2
         fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(4 * cols, 3.5 * rows))
-        for (i, initial_setup), title in zip(enumerate(initial_setup_list), titles):
-            ax = axes[i]
+        for i, distribution_params in enumerate(distribution_params_list):
+            title = title_name(distribution_params)
+            #ax = axes[i]
+            ax = axes[i // 2, i % 2]
             simpleaxis(ax)
-            self.initial_setup = initial_setup
-            self.plot_state_distribution(ax, seed_initial_condition_list, t_list)
+            self.distribution_params = distribution_params
             self.plot_state_distribution(ax, seed_initial_condition_list, t_list)
             ax.tick_params(axis='both', which='major', labelsize=13)
             ax.set_title(title, size=labelsize*0.5)
 
-
         #ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.23, 0.09) ) 
 
         if self.quantum_or_not == True:
-            state = '$\\rho$'
+            if self.rho_or_phase == 'rho':
+                xlabel = '$\\rho - \\langle \\rho \\rangle$'
+                ylabel =  '$P(\\rho)$'
+            elif self.rho_or_phase == 'phase':
+                xlabel = '$\\theta$   ($\\times \pi$)'
+                ylabel = '$P(\\theta)$'
         else:
-            state = '$\\psi$'
+            xlabel = '$\\psi$'
+            ylabel = '$P(\\psi)$'
         ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.19, -0.09) ) 
-        fig.text(x=0.02, y=0.5, horizontalalignment='center', s='$P$(' + state +')', size=labelsize*0.6, rotation=90)
-        fig.text(x=0.5, y=0.03, horizontalalignment='center', s=state, size=labelsize*0.6)
+        fig.text(x=0.02, y=0.5, horizontalalignment='center', s=ylabel, size=labelsize*0.6, rotation=90)
+        fig.text(x=0.5, y=0.03, horizontalalignment='center', s=xlabel, size=labelsize*0.6)
         fig.subplots_adjust(left=0.1, right=0.95, wspace=0.25, hspace=0.25, bottom=0.21, top=0.90)
-        #save_des = '../manuscript/dimension_reduction_v3_072422/' + self.dynamics + '_' + self.network_type + f'_tau_c_m.png'
-        #plt.savefig(save_des, format='png')
-        #plt.close()
-
-
-        
-
+        filename = f'N={self.N}_{rho_or_phase}_distribution.png'
+        save_des = '../transfer_figure/' + filename
+        plt.savefig(save_des, format='png')
+        plt.close()
 
 
 
@@ -138,30 +164,34 @@ if __name__ == '__main__':
     quantum_or_not = False
     initial_setup = 'uniform_random'
     quantum_or_not = True
-    initial_setup = 'rho_uniform_phase_uniform'
-    initial_setup = 'rho_const_phase_uniform'
-    initial_setup = 'rho_uniform_phase_const_pi'
-    initial_setup = 'rho_uniform_phase_const_pi_quater'
-    initial_setup = 'rho_uniform_phase_const_pi_half'
     initial_setup = 'gaussian_wave'
+    initial_setup = 'uniform_random'
     network_type = '1D'
-    N = 10000
+    N = 100
     d = 4
     seed = 0
     alpha = 1
-    reference_line = 0.8
+    dt = 1
     reference_line = 'average'
-    seed_initial_condition_list = np.arange(0, 10, 1)
-    psd = plotStateDistribution(quantum_or_not, network_type, N, d, seed, alpha, initial_setup, seed_initial_condition_list, reference_line)
+    seed_initial_condition_list = np.arange(0, 100, 1)
+    distribution_params = [1, 1, 1, 1]
+    rho_or_phase = 'phase'
+    rho_or_phase = 'rho'
+    psd = plotStateDistribution(quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, distribution_params, seed_initial_condition_list, reference_line, rho_or_phase)
     #pdpp.plot_dpp_t()
 
     #pdpp.plot_dpp_scaling(N_list)
     reference_lines = ['average']
-    t_list = np.round(np.arange(0.0, 50, 5), 1).tolist()
+    t_list = np.round(np.arange(0.0, 10, 2), 1).tolist()
     #seed_initial_condition_list = [0]
-    initial_setup_list = ['rho_uniform_phase_uniform', 'rho_const_phase_uniform', 'rho_uniform_phase_const_pi']
-    titles = ['uniform random', 'const $\\rho$', 'const $\\theta$']
 
-    collector = psd.plot_statedis_initial_setup(initial_setup_list, seed_initial_condition_list, t_list)
+    distribution_params_raw = [[0, 1, 1, 1], [1, 1, -1, 1], [1/4, 3/4, 0, 0], [3/8, 5/8, 0, 0] ]
+
+    distribution_params_list = []
+    for i in distribution_params_raw:
+        distribution_params_list.append( [round(j, 3) for j in i])
+
+
+    collector = psd.plot_statedis_initial_setup(distribution_params_list, seed_initial_condition_list, t_list)
 
 
