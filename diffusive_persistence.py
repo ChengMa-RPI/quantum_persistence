@@ -307,7 +307,7 @@ class diffusionPersistence:
 
     
 
-cpu_number = 40
+cpu_number = 4
 
 
 m = 5.68
@@ -317,13 +317,10 @@ hbar = 0.6582
 if __name__ == '__main__':
     quantum_or_not = False
     quantum_or_not = True
-    network_type = '2D'
-    N = 100**2
-    d = 4
-    seed = 0
+    network_type = '2D_disorder'
+    N = 100
     alpha = 1
     dt = 1
-    seed = 0
     t = np.arange(0, 1000, dt)
 
     initial_setup = 'uniform_random'
@@ -331,14 +328,13 @@ if __name__ == '__main__':
     reference_line = 0.5
     reference_lines = ['average']
     seed_initial_condition_list = np.arange(10)
-    L_list = np.arange(10, 40, 10)
-    N_list = np.power(L_list, 2)
-    N_list = np.arange(100, 200, 200)
     initial_setup = 'rho_uniform_phase_uniform'
     initial_setup = 'uniform_random'
     rho_list = [[0, 1], [1/4, 3/4], [3/8, 5/8], [1, 1]]
     phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4], [0, 0]]
-    distribution_params_raw = [rho + phase for rho in rho_list for phase in phase_list][4:]
+    rho_list = [[1, 1]]
+    phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4]]
+    distribution_params_raw = [rho + phase for rho in rho_list for phase in phase_list]
     #distribution_params_raw = [rho for rho in rho_list]
 
     distribution_params_list = []
@@ -346,20 +342,23 @@ if __name__ == '__main__':
         distribution_params_list.append( [round(j, 3) for j in i])
 
 
-    N_list = [10000]
+    N_list = [100]
     alpha_list = [1]
     dt_list = [0.1]
     num_realization_list = [10]
     
-    for N, alpha, dt, num_realization in zip(N_list, alpha_list, dt_list, num_realization_list):
-        seed_initial_condition_list = np.arange(num_realization)
-        t = np.arange(0, 10000*dt, dt)
-        for distribution_params in distribution_params_list:
-            t1 = time.time()
-            dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, distribution_params, reference_line)
-            dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
-            t2 = time.time()
-            print(t2 - t1)
+    d_list = [0.6, 0.7, 0.8, 0.9]
+    seed = 0
+    for d in d_list:
+        for N, alpha, dt, num_realization in zip(N_list, alpha_list, dt_list, num_realization_list):
+            seed_initial_condition_list = np.arange(num_realization)
+            t = np.arange(0, 10000*dt, dt)
+            for distribution_params in distribution_params_list:
+                t1 = time.time()
+                dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, distribution_params, reference_line)
+                dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
+                t2 = time.time()
+                print(t2 - t1)
 
 
 

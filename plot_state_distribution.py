@@ -3,7 +3,7 @@ os.environ['OPENBLAS_NUM_THREADS'] ='1'
 os.environ['OMP_NUM_THREADS'] = '1'
 
 import sys
-sys.path.insert(1, '/home/mac6/RPI/research/')
+sys.path.insert(1, '/home/mac/RPI/research/')
 
 import numpy as np
 import networkx as nx
@@ -46,7 +46,7 @@ def simpleaxis(ax):
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()
 
-def title_name(params, quantum_or_not):
+def title_name(params, quantum_or_not, d=None):
 
     if quantum_or_not:
         rho_start, rho_end, phase_start, phase_end = params
@@ -64,9 +64,15 @@ def title_name(params, quantum_or_not):
         rho_title = '$\\rho \sim $' + f'({rho_start * 2}/N, {rho_end * 2}/N)'
 
     if quantum_or_not:
-        return rho_title  + '\n' + phase_title
+        if d:
+            return f'$d={d}$\n' + phase_title
+        else:
+            return rho_title  + '\n' + phase_title
     else:
-        return rho_title  
+        if d:
+            return f'$d={d}$' 
+        else:
+            return rho_title 
 
 
 
@@ -175,6 +181,43 @@ class plotStateDistribution():
         plt.savefig(save_des, format='png')
         plt.close()
 
+    def plot_statedis_disorder(self, d_list, distribution_params_list, seed_initial_condition_list, t_list):
+        rows = len(d_list)
+        cols = len(distribution_params_list)
+        fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(4 * cols, 3.5 * rows))
+        for i, d in enumerate(d_list):
+            for j, distribution_params in enumerate(distribution_params_list):
+                ax = axes[i, j]
+                simpleaxis(ax)
+                self.distribution_params = distribution_params
+                self.d = d
+                title = title_name(distribution_params, self.quantum_or_not, d)
+                self.plot_state_distribution(ax, seed_initial_condition_list, t_list)
+                ax.tick_params(axis='both', which='major', labelsize=13)
+                ax.annotate(f'({letters[i]})', xy=(0, 0), xytext=(-0.05, 1.02), xycoords='axes fraction', size=22)
+                ax.set_title(title, size=labelsize*0.5, y = 0.92)
+
+        #ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.23, 0.09) ) 
+
+        if self.quantum_or_not == True:
+            if self.rho_or_phase == 'rho':
+                xlabel = '$\\rho - \\langle \\rho \\rangle$'
+                ylabel =  '$P(\\rho)$'
+            elif self.rho_or_phase == 'phase':
+                xlabel = '$\\theta$   ($\\times \pi$)'
+                ylabel = '$P(\\theta)$'
+        else:
+            xlabel = '$\\psi$'
+            ylabel = '$P(\\psi)$'
+        ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.19, -0.09) ) 
+        fig.text(x=0.02, y=0.5, horizontalalignment='center', s=ylabel, size=labelsize*0.6, rotation=90)
+        fig.text(x=0.5, y=0.03, horizontalalignment='center', s=xlabel, size=labelsize*0.6)
+        fig.subplots_adjust(left=0.1, right=0.95, wspace=0.25, hspace=0.25, bottom=0.11, top=0.90)
+        filename = f'quantum={self.quantum_or_not}_network={self.network_type}_N={self.N}_seed={seed}_{rho_or_phase}_distribution.png'
+        save_des = '../transfer_figure/' + filename
+        plt.savefig(save_des, format='png')
+        plt.close()
+
 
 letters = 'abcdefghijklmnopqrstuvwxyz'
 
@@ -185,16 +228,18 @@ if __name__ == '__main__':
     initial_setup = 'gaussian_wave'
     initial_setup = 'uniform_random'
     network_type = '2D'
-    N = 10000
+    network_type = '2D_disorder'
+    N = 100
     d = 4
     seed = 0
     alpha = 1
     dt = 0.1
     reference_line = 'average'
+    reference_line = 0.5
     seed_initial_condition_list = np.arange(0, 10, 1)
     distribution_params = [1, 1, 1, 1]
-    rho_or_phase = 'rho'
     rho_or_phase = 'phase'
+    rho_or_phase = 'rho'
     psd = plotStateDistribution(quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, distribution_params, seed_initial_condition_list, reference_line, rho_or_phase)
     #pdpp.plot_dpp_t()
 
@@ -205,6 +250,8 @@ if __name__ == '__main__':
 
     rho_list = [[0, 1], [1/4, 3/4], [3/8, 5/8], [1, 1]]
     phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4], [0, 0]]
+    rho_list = [[1, 1]]
+    phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4]]
     distribution_params_raw = [rho + phase for rho in rho_list for phase in phase_list]
 
 
@@ -214,6 +261,7 @@ if __name__ == '__main__':
         distribution_params_list.append( [round(j, 3) for j in i])
 
 
-    collector = psd.plot_statedis_initial_setup(distribution_params_list, seed_initial_condition_list, t_list)
+    #psd.plot_statedis_initial_setup(distribution_params_list, seed_initial_condition_list, t_list)
 
-
+    d_list = [0.6, 0.7, 0.8, 0.9]
+    psd.plot_statedis_disorder(d_list, distribution_params_list, seed_initial_condition_list, t_list)

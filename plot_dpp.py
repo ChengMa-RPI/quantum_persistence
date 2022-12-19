@@ -74,7 +74,7 @@ def simpleaxis(ax):
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()
 
-def title_name(params, quantum_or_not):
+def title_name(params, quantum_or_not, d=None):
 
     if quantum_or_not:
         rho_start, rho_end, phase_start, phase_end = params
@@ -92,9 +92,18 @@ def title_name(params, quantum_or_not):
         rho_title = '$\\rho \sim $' + f'({rho_start * 2}/N, {rho_end * 2}/N)'
 
     if quantum_or_not:
-        return rho_title  + '\n' + phase_title
+        if d:
+            return f'$d={d}$' + ', ' + phase_title
+        else:
+            return rho_title  + ', ' + phase_title
     else:
-        return rho_title  
+        if d:
+            return f'$d={d}$' 
+        else:
+            return rho_title  
+
+
+
 
 
 
@@ -245,7 +254,6 @@ class Plot_Dpp():
         else:
             ax.semilogy(t, P_ave, label=label)
 
-
     def plot_pa_pb_initial_setup(self, N, distribution_params_list):
         cols = 2
         rows = 1
@@ -275,6 +283,36 @@ class Plot_Dpp():
         plt.close()
         return 
 
+    def plot_pa_pb_disorder(self, N, d_list, distribution_params_list):
+        cols = 2
+        rows = 1
+        fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(4 * cols, 3.5 * rows))
+        for j, pa_or_pb in enumerate(['pa', 'pb']):
+            ax = axes[j]
+            simpleaxis(ax)
+            for d, distribution_params in zip(d_list, distribution_params_list):
+                self.d = d
+                self.distribution_params = distribution_params
+                label = title_name(distribution_params, self.quantum_or_not, d)
+                self.plot_dpp_t_initial_setup(ax, N, pa_or_pb, label)
+                ax.tick_params(axis='both', which='major', labelsize=13)
+                #ax.set_ylim(7e-2, 1)
+
+        ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(2.19, 0.5) ) 
+        fig.text(x=0.02, y=0.5, horizontalalignment='center', s="$P_a$", size=labelsize*0.6, rotation=90)
+        fig.text(x=0.35, y=0.5, horizontalalignment='center', s="$P_b$", size=labelsize*0.6, rotation=90)
+        #fig.text(x=0.37, y=0.01, horizontalalignment='center', s="$t / (\\Delta x) ^2$", size=labelsize*0.6)
+        fig.text(x=0.37, y=0.01, horizontalalignment='center', s="$t$", size=labelsize*0.6)
+        fig.subplots_adjust(left=0.1, right=0.69, wspace=0.25, hspace=0.25, bottom=0.2, top=0.95)
+        if d_list[0] == d_list[1]:
+            save_des = f'../transfer_figure/quantum={self.quantum_or_not}_network={self.network_type}_N={self.N}_seed={seed}_d={self.d}_dpp.png'
+        else:
+            save_des = f'../transfer_figure/quantum={self.quantum_or_not}_network={self.network_type}_N={self.N}_seed={seed}_phase={self.distribution_params[2:]}_dpp.png'
+
+
+        plt.savefig(save_des, format='png')
+        plt.close()
+        return 
 
 
 
@@ -319,7 +357,8 @@ if __name__ == '__main__':
     initial_setup = 'uniform_random'
     distribution_params = [0, 1, -1, -1]
     network_type = '2D'
-    N = 10000
+    network_type = '2D_disorder'
+    N = 100
     d = 4
     seed = 0
     alpha = 1
@@ -340,7 +379,11 @@ if __name__ == '__main__':
 
     rho_list = [[0, 1], [1/4, 3/4], [3/8, 5/8], [1, 1]]
     phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4], [0, 0]]
-    distribution_params_raw_list = [rho + phase for rho in rho_list for phase in phase_list][:-1]
+
+    rho_list = [[1, 1]]
+    phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4]]
+    distribution_params_raw_list = [rho + phase for rho in rho_list for phase in phase_list]
+
     for i in range(4):
         for distribution_params_raw in (distribution_params_raw_list[i:][::4], distribution_params_raw_list[4 * i:4 * (i+1)]) :
 
@@ -349,7 +392,18 @@ if __name__ == '__main__':
                 distribution_params_list.append( [round(j, 3) for j in i])
 
 
-            pdpp.plot_pa_pb_initial_setup(N, distribution_params_list)
+            #pdpp.plot_pa_pb_initial_setup(N, distribution_params_list)
+
+    "disorder 2D"
+    distribution_params_list = []
+    for i in distribution_params_raw_list:
+        distribution_params_list.append( [round(j, 3) for j in i])
+    d_list = [0.6, 0.7, 0.8, 0.9]
+    for i, d in enumerate(d_list):
+        pdpp.plot_pa_pb_disorder(N, [d] * len(distribution_params_list), distribution_params_list)
+
+    for i, distribution_params in enumerate(distribution_params_list):
+        pdpp.plot_pa_pb_disorder(N, d_list, [distribution_params] * len(d_list))
 
 
 

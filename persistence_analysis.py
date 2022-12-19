@@ -240,7 +240,7 @@ class persistenceAnalysis:
 
     
 
-cpu_number = 40
+cpu_number = 4
 
 
 m = 5.68
@@ -249,29 +249,33 @@ hbar = 0.6582
 
 if __name__ == '__main__':
     network_type = '2D'
+    network_type = '2D_disorder'
     quantum_or_not = False
     initial_setup = 'uniform_random'
     quantum_or_not = True
     initial_setup = 'gaussian_wave'
     initial_setup = 'sum_sin_inphase'
     initial_setup = 'uniform_random'
-    N = 10000
+    N = 100
     d = 4
     seed = 0
     alpha = 1
-    reference_line = 'average'
     reference_line = 0.5
+    reference_line = 'average'
     reference_lines = ['average']
     seed_initial_condition_list = np.arange(10)
 
 
     alpha_list = [1]
-    N_list = [10000]
+    N_list = [100]
     dt_list = [0.1]
     num_realization_list = [10] 
     rho_list = [[0, 1], [1/4, 3/4], [3/8, 5/8], [1, 1]]
     phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4], [0, 0]]
-    distribution_params_raw = [rho + phase for rho in rho_list for phase in phase_list][4:]
+
+    rho_list = [[1, 1]]
+    phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4]]
+    distribution_params_raw = [rho + phase for rho in rho_list for phase in phase_list]
 
 
     distribution_params_list = []
@@ -279,8 +283,8 @@ if __name__ == '__main__':
         distribution_params_list.append( [round(j, 3) for j in i])
 
 
-
-    for reference_line in reference_lines:
+    d_list = [0.6, 0.7, 0.8, 0.9]
+    for d in d_list:
         for N, alpha, dt, num_realization in zip(N_list, alpha_list, dt_list, num_realization_list):
             seed_initial_condition_list = np.arange(num_realization)
             for distribution_params in distribution_params_list:

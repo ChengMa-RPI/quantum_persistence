@@ -47,7 +47,7 @@ def simpleaxis(ax):
     ax.get_yaxis().tick_left()
 
 
-def title_name(params, quantum_or_not):
+def title_name(params, quantum_or_not, d=None):
     if quantum_or_not:
         rho_start, rho_end, phase_start, phase_end = params
         if phase_start == phase_end:
@@ -64,9 +64,15 @@ def title_name(params, quantum_or_not):
         rho_title = '$\\rho \sim $' + f'({rho_start * 2}/N, {rho_end * 2}/N)'
 
     if quantum_or_not:
-        return rho_title  + '\n' + phase_title
+        if d:
+            return f'$d={d}$' + '\n' + phase_title
+        else:
+            return rho_title  + '\n' + phase_title
     else:
-        return rho_title  
+        if d:
+            return f'$d={d}$' 
+        else:
+            return rho_title  
 
 
 
@@ -176,6 +182,29 @@ class plotSignTime():
         plt.savefig(save_des, format='png')
         plt.close()
 
+    def plot_signtime_disorder(self, tau, d_list, distribution_params_list):
+        rows = len(d_list)
+        cols = len(distribution_params_list) 
+        fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(4 * cols, 3.5 * rows))
+        for i, d in enumerate(d_list):
+            for j, distribution_params in enumerate(distribution_params_list):
+                ax = axes[i, j]
+                simpleaxis(ax)
+                self.distribution_params = distribution_params
+                self.d = d
+                self.plot_sign_time_distribution(ax, tau, 'above')
+                self.plot_sign_time_distribution(ax, tau, 'below')
+                ax.tick_params(axis='both', which='major', labelsize=15)
+                ax.set_title(title_name(distribution_params, self.quantum_or_not, d), size=labelsize*0.55, y=0.92)
+
+
+        axes[-1, -2].legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.19, 0.19) ) 
+        fig.text(x=0.03, y=0.5, horizontalalignment='center', s="$P(\\tau/t)$", size=labelsize*0.6, rotation=90)
+        fig.text(x=0.5, y=0.04, horizontalalignment='center', s="$\\tau/t$", size=labelsize*0.6)
+        fig.subplots_adjust(left=0.1, right=0.95, wspace=0.25, hspace=0.25, bottom=0.11, top=0.95)
+        save_des = f'../transfer_figure/quantum={self.quantum_or_not}_network={self.network_type}_N={self.N}_seed={self.seed}_sign_time.png'
+        plt.savefig(save_des, format='png')
+        plt.close()
         
 
 
@@ -186,7 +215,8 @@ if __name__ == '__main__':
     initial_setup = 'uniform_random'
     quantum_or_not = True
     network_type = '2D'
-    N = 10000
+    network_type = '2D_disorder'
+    N = 100
     d = 4
     seed = 0
     alpha = 1
@@ -198,12 +228,17 @@ if __name__ == '__main__':
     tau = 1000
     rho_list = [[0, 1], [1/4, 3/4], [3/8, 5/8], [1, 1]]
     phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4], [0, 0]]
+
+    rho_list = [[1, 1]]
+    phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4]]
     distribution_params_raw = [rho + phase for rho in rho_list for phase in phase_list]
     distribution_params_list = []
     for i in distribution_params_raw:
         distribution_params_list.append([round(j, 3) for  j in i])
 
 
-    pst.plot_signtime_initial_setup(tau, distribution_params_list)
+    #pst.plot_signtime_initial_setup(tau, distribution_params_list)
+    d_list = [0.6, 0.7, 0.8, 0.9]
+    pst.plot_signtime_disorder(tau, d_list, distribution_params_list)
 
 
