@@ -16,8 +16,8 @@ def transfer_files(directory, filenames):
     server_des = '/home/mac6/RPI/research/quantum_se/data/' 
     local_des = '/home/mac/RPI/research/quantum_se/data/'
 
-    server_des = '/home/mac6/RPI/research/quantum_se/code' 
-    local_des = '/home/mac/RPI/research/quantum_se/code_copy'
+    #server_des = '/home/mac6/RPI/research/quantum_se/code' 
+    #local_des = '/home/mac/RPI/research/quantum_se/code_copy'
 
     if not os.path.exists(local_des):
         os.makedirs(local_des)
@@ -47,7 +47,6 @@ if not os.path.exists(des):
     os.makedirs(des)
 
 des = '../transfer_figure/'
-des = '/'
 
 
 transfer_files(des, [])

@@ -3,7 +3,7 @@ os.environ['OPENBLAS_NUM_THREADS'] ='1'
 os.environ['OMP_NUM_THREADS'] = '1'
 
 import sys
-sys.path.insert(1, '/home/mac/RPI/research/')
+sys.path.insert(1, '/home/mac6/RPI/research/')
 
 import numpy as np
 import networkx as nx
@@ -20,7 +20,6 @@ from scipy.integrate import odeint
 from mutual_framework import network_generate, betaspace
 import scipy.stats as stats
 import time
-from netgraph import Graph
 import matplotlib.image as mpimg
 from collections import defaultdict
 from matplotlib import patches 
@@ -47,18 +46,28 @@ def simpleaxis(ax):
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()
 
-def title_name(params):
-    rho_start, rho_end, phase_start, phase_end = params
+def title_name(params, quantum_or_not):
+
+    if quantum_or_not:
+        rho_start, rho_end, phase_start, phase_end = params
+        if phase_start == phase_end:
+            phase_title = '$\\theta = C$'
+        else:
+            phase_title = '$\\theta \sim $' + f'({phase_start } $\\pi$, {phase_end } $\\pi$)'
+
+    else:
+        rho_start, rho_end = params
+
     if rho_start == rho_end:
         rho_title = '$\\rho = C$'
     else:
-        rho_title = '$\\rho \sim \\mathcal{U}$' + f'({rho_start * 2}/N, {rho_end * 2}/N)'
+        rho_title = '$\\rho \sim $' + f'({rho_start * 2}/N, {rho_end * 2}/N)'
 
-    if phase_start == phase_end:
-        phase_title = '$\\theta = C$'
+    if quantum_or_not:
+        return rho_title  + '\n' + phase_title
     else:
-        phase_title = '$\\theta \sim \\mathcal{U}$' + f'({phase_start } $\\pi$, {phase_end } $\\pi$)'
-    return rho_title  + ', ' + phase_title
+        return rho_title  
+
 
 
 
@@ -96,9 +105,12 @@ class plotStateDistribution():
     
     def plot_state_distribution(self, ax, seed_initial_condition_list, t_list):
         data_list = defaultdict(list)
+        N_total = 0
         for seed_initial_condition in seed_initial_condition_list:
             state_distribution = self.read_state_distribution(seed_initial_condition)
             p_state = state_distribution['p_state']
+            N_actual = sum(p_state[str(t_list[0])]['p'])
+            N_total += N_actual
             bins_num = state_distribution['bin_num']
             #t_list = p_state['t_list']
             for t_i in t_list:
@@ -108,8 +120,11 @@ class plotStateDistribution():
                 data_list[t_i].append(replicate)
         for t_i in t_list:
             p, bins = np.histogram(data_list[t_i], bins=bins_num)
-            p = p / self.N / len(seed_initial_condition_list)
-            
+            p = p / N_total  # normalize by the total number of nodes in all realizations
+            if self.rho_or_phase == 'rho':
+                p = p[5:-5]
+                bins = bins[5:-5]  # remove edge effects, which is caused by multiple realizations
+
             if self.rho_or_phase == 'phase':
                 ax.semilogy(bins[:-1] / np.pi , p, '-', label='t=' + str(t_i) )
             else:
@@ -119,23 +134,25 @@ class plotStateDistribution():
         else:
             state = '$\\psi$'
 
-        plt.legend(frameon=False)
-        plt.locator_params(axis='x', nbins=4)
+        if self.rho_or_phase == 'rho':
+            ax.set_xlim(-1.2/self.N, 6/self.N)
+        ax.locator_params(axis='x', nbins=4)
         return state_distribution
 
     def plot_statedis_initial_setup(self, distribution_params_list, seed_initial_condition_list, t_list):
-        cols = len(distribution_params_list) // 2
-        rows = 2
+        rows = 4
+        cols = len(distribution_params_list) // rows
         fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(4 * cols, 3.5 * rows))
         for i, distribution_params in enumerate(distribution_params_list):
-            title = title_name(distribution_params)
+            title = title_name(distribution_params, self.quantum_or_not)
             #ax = axes[i]
-            ax = axes[i // 2, i % 2]
+            ax = axes[i // cols, i % cols]
             simpleaxis(ax)
             self.distribution_params = distribution_params
             self.plot_state_distribution(ax, seed_initial_condition_list, t_list)
             ax.tick_params(axis='both', which='major', labelsize=13)
-            ax.set_title(title, size=labelsize*0.5)
+            ax.annotate(f'({letters[i]})', xy=(0, 0), xytext=(-0.05, 1.02), xycoords='axes fraction', size=22)
+            ax.set_title(title, size=labelsize*0.5, y = 0.92)
 
         #ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.23, 0.09) ) 
 
@@ -159,6 +176,7 @@ class plotStateDistribution():
         plt.close()
 
 
+letters = 'abcdefghijklmnopqrstuvwxyz'
 
 if __name__ == '__main__':
     quantum_or_not = False
@@ -166,26 +184,30 @@ if __name__ == '__main__':
     quantum_or_not = True
     initial_setup = 'gaussian_wave'
     initial_setup = 'uniform_random'
-    network_type = '1D'
-    N = 100
+    network_type = '2D'
+    N = 10000
     d = 4
     seed = 0
     alpha = 1
-    dt = 1
+    dt = 0.1
     reference_line = 'average'
-    seed_initial_condition_list = np.arange(0, 100, 1)
+    seed_initial_condition_list = np.arange(0, 10, 1)
     distribution_params = [1, 1, 1, 1]
-    rho_or_phase = 'phase'
     rho_or_phase = 'rho'
+    rho_or_phase = 'phase'
     psd = plotStateDistribution(quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, distribution_params, seed_initial_condition_list, reference_line, rho_or_phase)
     #pdpp.plot_dpp_t()
 
     #pdpp.plot_dpp_scaling(N_list)
     reference_lines = ['average']
-    t_list = np.round(np.arange(0.0, 10, 2), 1).tolist()
+    t_list = np.round(np.arange(0.0, 100, 20), 1).tolist()
     #seed_initial_condition_list = [0]
 
-    distribution_params_raw = [[0, 1, 1, 1], [1, 1, -1, 1], [1/4, 3/4, 0, 0], [3/8, 5/8, 0, 0] ]
+    rho_list = [[0, 1], [1/4, 3/4], [3/8, 5/8], [1, 1]]
+    phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4], [0, 0]]
+    distribution_params_raw = [rho + phase for rho in rho_list for phase in phase_list]
+
+
 
     distribution_params_list = []
     for i in distribution_params_raw:

@@ -20,7 +20,6 @@ from scipy.integrate import odeint
 from mutual_framework import network_generate, betaspace
 import scipy.stats as stats
 import time
-from netgraph import Graph
 import matplotlib.image as mpimg
 from collections import defaultdict
 from matplotlib import patches 
@@ -47,15 +46,43 @@ def simpleaxis(ax):
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()
 
+
+def title_name(params, quantum_or_not):
+    if quantum_or_not:
+        rho_start, rho_end, phase_start, phase_end = params
+        if phase_start == phase_end:
+            phase_title = '$\\theta = C$'
+        else:
+            phase_title = '$\\theta \sim $' + f'({phase_start } $\\pi$, {phase_end } $\\pi$)'
+
+    else:
+        rho_start, rho_end = params
+
+    if rho_start == rho_end:
+        rho_title = '$\\rho = C$'
+    else:
+        rho_title = '$\\rho \sim $' + f'({rho_start * 2}/N, {rho_end * 2}/N)'
+
+    if quantum_or_not:
+        return rho_title  + '\n' + phase_title
+    else:
+        return rho_title  
+
+
+
+
+
 class plotSignTime():
-    def __init__(self, quantum_or_not, network_type, N, d, seed, alpha, initial_setup, seed_initial_condition_list, reference_line):
+    def __init__(self, quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, distribution_params, seed_initial_condition_list, reference_line):
         self.quantum_or_not = quantum_or_not
         self.network_type = network_type
         self.N = N
         self.d = d
         self.seed = seed
         self.alpha = alpha
+        self.dt = dt
         self.initial_setup = initial_setup
+        self.distribution_params = distribution_params
         self.seed_initial_condition_list = seed_initial_condition_list
         self.reference_line = reference_line
 
@@ -64,7 +91,7 @@ class plotSignTime():
             des = '../data/quantum/meta_data/' + self.network_type + '/' 
         else:
             des = '../data/classical/meta_data/' + self.network_type + '/' 
-        filename = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_setup={self.initial_setup}_reference={self.reference_line}_seed_initial={seed_initial_condition}.json'
+        filename = des + f'N={self.N}_d={self.d}_seed={self.seed}_alpha={self.alpha}_dt={self.dt}_setup={self.initial_setup}_params={self.distribution_params}_reference={self.reference_line}_seed_initial={seed_initial_condition}.json'
         f = open(filename)
         meta_data = json.load(f)
         return meta_data
@@ -102,8 +129,11 @@ class plotSignTime():
     
     def plot_sign_time_distribution(self, ax, tau, above_or_below):
         collector = []
+        N_total = 0
         for seed_initial_condition in self.seed_initial_condition_list:
             all_above_intervals, all_above_time = self.get_above_interval_time(seed_initial_condition, tau)
+            N_actual = len(all_above_time)
+            N_total += N_actual
             all_below_time = tau - np.array(all_above_time)
             if above_or_below == 'above':
                 label = 'above'
@@ -116,59 +146,35 @@ class plotSignTime():
         collector /= tau
         #collector = collector / tau * (1 - collector / tau)
         count, bins = np.histogram(collector, bins = 100)
-        y = count / self.N / len(self.seed_initial_condition_list)
+        y = count / N_total
         x = bins[:-1]
         ax.semilogy(x, y, '.-', label=label)
         #ax.xlabel('$\\tau / t$', fontsize=labelsize * 0.5)
         #ax.ylabel('$P(\\tau / t)$', fontsize=labelsize * 0.5)
         return collector
 
-    def plot_signtime_initial_setup(self, tau, initial_setup_list, titles):
-        cols = len(initial_setup_list)
-        rows = 1
+    def plot_signtime_initial_setup(self, tau, distribution_params_list):
+        rows = 4
+        cols = len(distribution_params_list) // 4
         fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(4 * cols, 3.5 * rows))
-        for (i, initial_setup), title in zip(enumerate(initial_setup_list), titles):
-            ax = axes[i]
+        for i, distribution_params in enumerate(distribution_params_list):
+            ax = axes[i // cols, i % cols]
             simpleaxis(ax)
-            self.initial_setup = initial_setup
+            self.distribution_params = distribution_params
             self.plot_sign_time_distribution(ax, tau, 'above')
             self.plot_sign_time_distribution(ax, tau, 'below')
-            ax.tick_params(axis='both', which='major', labelsize=13)
-            ax.set_title(title, size=labelsize*0.5)
+            ax.tick_params(axis='both', which='major', labelsize=15)
+            ax.set_title(title_name(distribution_params, self.quantum_or_not), size=labelsize*0.55, y=0.92)
 
 
-        #ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.23, 0.09) ) 
-        ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.19, 0.79) ) 
-        fig.text(x=0.02, y=0.5, horizontalalignment='center', s="$P(\\tau/t)$", size=labelsize*0.6, rotation=90)
-        fig.text(x=0.5, y=0.01, horizontalalignment='center', s="$\\tau/t$", size=labelsize*0.6)
-        fig.subplots_adjust(left=0.1, right=0.95, wspace=0.25, hspace=0.25, bottom=0.2, top=0.90)
-        #save_des = '../manuscript/dimension_reduction_v3_072422/' + self.dynamics + '_' + self.network_type + f'_tau_c_m.png'
-        #plt.savefig(save_des, format='png')
-        #plt.close()
-
-    def plot_signtime_dxdt(self, tau, N_list, alpha_list, initial_setup, titles):
-        cols = len(initial_setup_list)
-        rows = 1
-        fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(4 * cols, 3.5 * rows))
-        for (i, initial_setup), title in zip(enumerate(initial_setup_list), titles):
-            ax = axes[i]
-            simpleaxis(ax)
-            self.initial_setup = initial_setup
-            self.plot_sign_time_distribution(ax, tau, 'above')
-            self.plot_sign_time_distribution(ax, tau, 'below')
-            ax.tick_params(axis='both', which='major', labelsize=13)
-            ax.set_title(title, size=labelsize*0.5)
-
-
-        #ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.23, 0.09) ) 
-        ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.19, 0.79) ) 
-        fig.text(x=0.02, y=0.5, horizontalalignment='center', s="$P(\\tau/t)$", size=labelsize*0.6, rotation=90)
-        fig.text(x=0.5, y=0.01, horizontalalignment='center', s="$\\tau/t$", size=labelsize*0.6)
-        fig.subplots_adjust(left=0.1, right=0.95, wspace=0.25, hspace=0.25, bottom=0.2, top=0.90)
-        #save_des = '../manuscript/dimension_reduction_v3_072422/' + self.dynamics + '_' + self.network_type + f'_tau_c_m.png'
-        #plt.savefig(save_des, format='png')
-        #plt.close()
-
+        fig.delaxes(axes[-1, -1] )
+        axes[-1, -2].legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(1.19, 0.19) ) 
+        fig.text(x=0.03, y=0.5, horizontalalignment='center', s="$P(\\tau/t)$", size=labelsize*0.6, rotation=90)
+        fig.text(x=0.5, y=0.04, horizontalalignment='center', s="$\\tau/t$", size=labelsize*0.6)
+        fig.subplots_adjust(left=0.1, right=0.95, wspace=0.25, hspace=0.25, bottom=0.11, top=0.95)
+        save_des = f'../transfer_figure/sign_time_quantum={self.quantum_or_not}_network={self.network_type}_N={self.N}.png'
+        plt.savefig(save_des, format='png')
+        plt.close()
 
         
 
@@ -179,31 +185,25 @@ if __name__ == '__main__':
     quantum_or_not = False
     initial_setup = 'uniform_random'
     quantum_or_not = True
-    initial_setup = 'rho_uniform_phase_uniform'
-    initial_setup = 'rho_uniform_phase_const'
-    initial_setup = 'rho_const_phase_uniform'
-    network_type = '1D'
+    network_type = '2D'
     N = 10000
     d = 4
     seed = 0
     alpha = 1
-    reference_line = 0.8
+    dt = 0.1
     reference_line = 'average'
     seed_initial_condition_list = np.arange(0, 10, 1)
-    pst = plotSignTime(quantum_or_not, network_type, N, d, seed, alpha, initial_setup, seed_initial_condition_list, reference_line)
-    #pdpp.plot_dpp_t()
-    L_list = np.arange(100, 60, 50)
-    N_list = np.power(L_list, 2)
-    N_list = [10000]
-
-    #pdpp.plot_dpp_scaling(N_list)
-    reference_lines = ['average']
+    distribution_params = []
+    pst = plotSignTime(quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, distribution_params, seed_initial_condition_list, reference_line)
     tau = 1000
-    above_or_below = 'below'
-    above_or_below = 'above'
-    initial_setup_list = ['rho_uniform_phase_uniform', 'rho_const_phase_uniform', 'rho_uniform_phase_const_pi']
-    titles = ['uniform random', 'const $\\rho$', 'const $\\theta$']
+    rho_list = [[0, 1], [1/4, 3/4], [3/8, 5/8], [1, 1]]
+    phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4], [0, 0]]
+    distribution_params_raw = [rho + phase for rho in rho_list for phase in phase_list]
+    distribution_params_list = []
+    for i in distribution_params_raw:
+        distribution_params_list.append([round(j, 3) for  j in i])
 
-    pst.plot_signtime_initial_setup(tau, initial_setup_list, titles)
+
+    pst.plot_signtime_initial_setup(tau, distribution_params_list)
 
 

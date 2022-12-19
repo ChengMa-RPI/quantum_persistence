@@ -240,7 +240,7 @@ class persistenceAnalysis:
 
     
 
-cpu_number = 4
+cpu_number = 40
 
 
 m = 5.68
@@ -248,7 +248,7 @@ hbar = 0.6582
 
 
 if __name__ == '__main__':
-    network_type = '1D'
+    network_type = '2D'
     quantum_or_not = False
     initial_setup = 'uniform_random'
     quantum_or_not = True
@@ -266,10 +266,14 @@ if __name__ == '__main__':
 
 
     alpha_list = [1]
-    N_list = [100]
-    dt_list = [1]
-    num_realization_list = [100] 
-    distribution_params_raw = [[0, 1, 1, 1], [1, 1, -1, 1]]
+    N_list = [10000]
+    dt_list = [0.1]
+    num_realization_list = [10] 
+    rho_list = [[0, 1], [1/4, 3/4], [3/8, 5/8], [1, 1]]
+    phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4], [0, 0]]
+    distribution_params_raw = [rho + phase for rho in rho_list for phase in phase_list][4:]
+
+
     distribution_params_list = []
     for i in distribution_params_raw:
         distribution_params_list.append( [round(j, 3) for j in i])
@@ -285,8 +289,8 @@ if __name__ == '__main__':
                 pA.get_dpp_parallel(cpu_number, seed_initial_condition_list)
                 t_list = np.round(np.arange(0.0, 100, 1), 1).tolist()
                 for seed_initial_condition in seed_initial_condition_list:
-                    #pA.get_state_distribution(seed_initial_condition, t_list, 'rho')
-                    #pA.get_state_distribution(seed_initial_condition, t_list, 'phase')
+                    pA.get_state_distribution(seed_initial_condition, t_list, 'rho')
+                    pA.get_state_distribution(seed_initial_condition, t_list, 'phase')
                     pass
                 pass
 

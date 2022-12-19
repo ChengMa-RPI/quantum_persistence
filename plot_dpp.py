@@ -74,18 +74,28 @@ def simpleaxis(ax):
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()
 
-def title_name(params):
-    rho_start, rho_end, phase_start, phase_end = params
+def title_name(params, quantum_or_not):
+
+    if quantum_or_not:
+        rho_start, rho_end, phase_start, phase_end = params
+        if phase_start == phase_end:
+            phase_title = '$\\theta = C$'
+        else:
+            phase_title = '$\\theta \sim $' + f'({phase_start } $\\pi$, {phase_end } $\\pi$)'
+
+    else:
+        rho_start, rho_end = params
+
     if rho_start == rho_end:
         rho_title = '$\\rho = C$'
     else:
-        rho_title = '$\\rho \sim \\mathcal{U}$' + f'({rho_start * 2}/N, {rho_end * 2}/N)'
+        rho_title = '$\\rho \sim $' + f'({rho_start * 2}/N, {rho_end * 2}/N)'
 
-    if phase_start == phase_end:
-        phase_title = '$\\theta = C$'
+    if quantum_or_not:
+        return rho_title  + '\n' + phase_title
     else:
-        phase_title = '$\\theta \sim \\mathcal{U}$' + f'({phase_start } $\\pi$, {phase_end } $\\pi$)'
-    return rho_title  + ', ' + phase_title
+        return rho_title  
+
 
 
 
@@ -245,19 +255,22 @@ class Plot_Dpp():
             simpleaxis(ax)
             for distribution_params in distribution_params_list:
                 self.distribution_params = distribution_params
-                label = title_name(distribution_params)
+                label = title_name(distribution_params, self.quantum_or_not)
                 self.plot_dpp_t_initial_setup(ax, N, pa_or_pb, label)
                 ax.tick_params(axis='both', which='major', labelsize=13)
                 #ax.set_ylim(7e-2, 1)
 
-        ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(2.19, 0.3) ) 
+        ax.legend(fontsize=legendsize*0.7, frameon=False, loc=4, bbox_to_anchor=(2.19, 0.5) ) 
         fig.text(x=0.02, y=0.5, horizontalalignment='center', s="$P_a$", size=labelsize*0.6, rotation=90)
         fig.text(x=0.35, y=0.5, horizontalalignment='center', s="$P_b$", size=labelsize*0.6, rotation=90)
         #fig.text(x=0.37, y=0.01, horizontalalignment='center', s="$t / (\\Delta x) ^2$", size=labelsize*0.6)
         fig.text(x=0.37, y=0.01, horizontalalignment='center', s="$t$", size=labelsize*0.6)
         fig.subplots_adjust(left=0.1, right=0.69, wspace=0.25, hspace=0.25, bottom=0.2, top=0.95)
-        #save_des = f'../transfer_figure/dpp_{self.initial_setup}_t.png'
-        save_des = f'../transfer_figure/dpp_N={self.N}.png'
+        if distribution_params_list[0][:2] == distribution_params_list[1][:2]:
+            save_des = f'../transfer_figure/quantum={self.quantum_or_not}_dpp_N={self.N}_rho={distribution_params[:2]}.png'
+
+        elif distribution_params_list[0][2:] == distribution_params_list[1][2:]:
+            save_des = f'../transfer_figure/quantum={self.quantum_or_not}_dpp_N={self.N}_phase={distribution_params[2:]}.png'
         plt.savefig(save_des, format='png')
         plt.close()
         return 
@@ -305,14 +318,14 @@ if __name__ == '__main__':
     initial_setup = 'sum_sin'
     initial_setup = 'uniform_random'
     distribution_params = [0, 1, -1, -1]
-    network_type = '1D'
-    N = 100
+    network_type = '2D'
+    N = 10000
     d = 4
     seed = 0
     alpha = 1
     reference_line = 'average'
-    seed_initial_condition_list = np.arange(0, 100, 1)
-    dt = 1
+    seed_initial_condition_list = np.arange(0, 10, 1)
+    dt = 0.1
     pdpp = Plot_Dpp(quantum_or_not, network_type, N, d, seed, alpha, dt, initial_setup, distribution_params, seed_initial_condition_list, reference_line)
     #pdpp.plot_dpp_t()
 
@@ -321,18 +334,22 @@ if __name__ == '__main__':
     N_list = [100, 300, 500]
 
     #pdpp.plot_dpp_scaling(N_list)
-    N_list = [100]
+    N_list = [1000]
     reference_lines = ['average']
     #pdpp.plot_pa_pb_reference(N_list, reference_lines)
 
-    distribution_params_raw = [[0, 1, 1, 1], [1, 1, -1, 1], [1/4, 3/4, 0, 0], [3/8, 5/8, 0, 0] ]
+    rho_list = [[0, 1], [1/4, 3/4], [3/8, 5/8], [1, 1]]
+    phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4], [0, 0]]
+    distribution_params_raw_list = [rho + phase for rho in rho_list for phase in phase_list][:-1]
+    for i in range(4):
+        for distribution_params_raw in (distribution_params_raw_list[i:][::4], distribution_params_raw_list[4 * i:4 * (i+1)]) :
 
-    distribution_params_list = []
-    for i in distribution_params_raw:
-        distribution_params_list.append( [round(j, 3) for j in i])
+            distribution_params_list = []
+            for i in distribution_params_raw:
+                distribution_params_list.append( [round(j, 3) for j in i])
 
 
-    pdpp.plot_pa_pb_initial_setup(N, distribution_params_list)
+            pdpp.plot_pa_pb_initial_setup(N, distribution_params_list)
 
 
 

@@ -94,12 +94,18 @@ class diffusionPersistence:
 
         """
         seed_initial_condition = self.seed_initial_condition
+        t = time.time()
+        modifer = int((t - int(t)) * 1e9) 
+        np.random.seed(seed_initial_condition + modifer)  # set the seed in the beginning
+
         initial_setup = self.initial_setup
         N_actual = self.N_actual
         average = 1 / N_actual
         if quantum_or_not == 0:
             if initial_setup == 'uniform_random':
-                initial_condition = np.random.RandomState(seed_initial_condition).uniform(0, 1, size = N_actual)
+                rho_start, rho_end = self.distribution_params
+                #initial_condition = np.random.RandomState(seed_initial_condition).uniform(rho_start, rho_end, size=N_actual)
+                initial_condition = np.random.uniform(rho_start, rho_end, size=N_actual)
                 initial_condition = initial_condition / np.sum(initial_condition)
         else:
             if initial_setup == 'uniform_random':
@@ -107,12 +113,13 @@ class diffusionPersistence:
                 if rho_start == rho_end:
                     initial_rho = np.ones(N_actual) * rho_start
                 else:
-                    initial_rho = np.random.RandomState(seed_initial_condition).uniform(rho_start, rho_end, size=self.N_actual)
+                    #initial_rho = np.random.RandomState(seed_initial_condition).uniform(rho_start, rho_end, size=N_actual)
+                    initial_rho = np.random.uniform(rho_start, rho_end, size=N_actual)
                 if phase_start == phase_end:
                     initial_phase = np.ones(N_actual) * phase_start * np.pi
                 else:
-                    initial_phase = np.random.RandomState(seed_initial_condition).uniform(phase_start * np.pi, phase_end * np.pi, size = self.N_actual)
-
+                    #initial_phase = np.random.RandomState(seed_initial_condition).uniform(phase_start * np.pi, phase_end * np.pi, size = N_actual)
+                    initial_phase = np.random.uniform(phase_start * np.pi, phase_end * np.pi, size=N_actual)
 
             elif initial_setup == 'gaussian_wave':
                 sigma = 1
@@ -300,7 +307,7 @@ class diffusionPersistence:
 
     
 
-cpu_number = 4
+cpu_number = 40
 
 
 m = 5.68
@@ -308,13 +315,14 @@ hbar = 0.6582
 
 
 if __name__ == '__main__':
+    quantum_or_not = False
     quantum_or_not = True
-    network_type = '1D'
+    network_type = '2D'
     N = 100**2
     d = 4
     seed = 0
     alpha = 1
-    dt = 0.1
+    dt = 1
     seed = 0
     t = np.arange(0, 1000, dt)
 
@@ -328,29 +336,30 @@ if __name__ == '__main__':
     N_list = np.arange(100, 200, 200)
     initial_setup = 'rho_uniform_phase_uniform'
     initial_setup = 'uniform_random'
-    distribution_params_raw = [[0, 1, 1, 1], [1, 1, -1, 1] ]
-
+    rho_list = [[0, 1], [1/4, 3/4], [3/8, 5/8], [1, 1]]
+    phase_list = [[-1, 1], [-1/2, 1/2], [-1/4, 1/4], [0, 0]]
+    distribution_params_raw = [rho + phase for rho in rho_list for phase in phase_list][4:]
+    #distribution_params_raw = [rho for rho in rho_list]
 
     distribution_params_list = []
     for i in distribution_params_raw:
         distribution_params_list.append( [round(j, 3) for j in i])
 
-    
 
-
-    N_list = [100]
+    N_list = [10000]
     alpha_list = [1]
-    dt_list = [1]
-    num_realization_list = [100]
+    dt_list = [0.1]
+    num_realization_list = [10]
     
-    t1 = time.time()
     for N, alpha, dt, num_realization in zip(N_list, alpha_list, dt_list, num_realization_list):
         seed_initial_condition_list = np.arange(num_realization)
         t = np.arange(0, 10000*dt, dt)
         for distribution_params in distribution_params_list:
+            t1 = time.time()
             dp = diffusionPersistence(quantum_or_not, network_type, N, d, seed, alpha, t, dt, initial_setup, distribution_params, reference_line)
             dp.save_phi_parallel(cpu_number, seed_initial_condition_list)
-    t2 = time.time()
+            t2 = time.time()
+            print(t2 - t1)
 
 
 
